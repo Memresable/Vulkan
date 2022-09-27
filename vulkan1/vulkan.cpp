@@ -27,16 +27,16 @@ std::vector<const char*> VulkanEngine::getRequiredExtensions()
 
 void VulkanEngine::createInstance()
 {
-    if (m_isDEBUG && (Validation::checkValidationSupport(m_validationLayers) == VK_FALSE))
+    if (m_isDEBUG && (checkValidationSupport(m_validationLayers) == VK_FALSE))
         throw std::exception("Validation layers requested, but not available");
 
     VkApplicationInfo appInfo{};
     appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
     appInfo.pApplicationName = "memrekom";
-    appInfo.applicationVersion = VK_MAKE_VERSION(1, 2, 0);
+    appInfo.applicationVersion = VK_MAKE_API_VERSION(0, 1, 2, 0);
     appInfo.pEngineName = "memrekom";
-    appInfo.engineVersion = VK_MAKE_VERSION(1, 2, 0);
-    appInfo.apiVersion = VK_MAKE_VERSION(1, 2, 0);
+    appInfo.engineVersion = VK_MAKE_API_VERSION(0, 1, 2, 0);
+    appInfo.apiVersion = VK_MAKE_API_VERSION(0, 1, 2, 0);
 
     auto extensions = getRequiredExtensions();
 
@@ -49,7 +49,7 @@ void VulkanEngine::createInstance()
     VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo{};
     if (m_isDEBUG)
     {
-        Validation::populateDebugMessengerCreateInfo(debugCreateInfo);
+        populateDebugMessengerCreateInfo(debugCreateInfo);
         createInstance.enabledLayerCount = (uint32_t)m_validationLayers.size();
         createInstance.ppEnabledLayerNames = m_validationLayers.data();
         createInstance.pNext = (VkDebugUtilsMessengerCreateInfoEXT*)&debugCreateInfo;
@@ -124,7 +124,7 @@ VulkanEngine::VulkanEngine()
 {
     initWindow();
     createInstance();
-    Validation::setupDebugMessenger(m_instance, m_debugMessenger, m_isDEBUG);
+    setupDebugMessenger(m_instance, m_debugMessenger, m_isDEBUG);
     pickPhysicalDevice();
 }
 
@@ -147,7 +147,7 @@ void VulkanEngine::mainLoop()
 VulkanEngine::~VulkanEngine()
 {
 // VULKAN
-    Validation::DestroyDebugUtilsMessengerEXT(m_instance, m_debugMessenger, VK_NULL_HANDLE);
+    DestroyDebugUtilsMessengerEXT(m_instance, m_debugMessenger, VK_NULL_HANDLE);
     vkDestroyInstance(m_instance, VK_NULL_HANDLE);
 
 // GLFW
