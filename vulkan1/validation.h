@@ -2,6 +2,7 @@
 #define VALIDATION_H
 
 #include "C:\VulkanSDK\1.3.224.1\Include\vulkan\vulkan.h"
+#include "utility.h"
 
 class Validation
 {

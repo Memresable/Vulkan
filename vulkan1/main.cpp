@@ -3,13 +3,6 @@
 int main()
 {
     VulkanEngine application{};
-    try
-    {
-        application.run();
-    }
-    catch (const std::exception& e)
-    {
-        std::cerr << e.what() << std::endl;
-    }
+    application.run();
     return EXIT_SUCCESS;
 }

@@ -136,6 +136,7 @@
     <ClCompile Include="vulkan.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="utility.h" />
     <ClInclude Include="validation.h" />
     <ClInclude Include="vulkan.h" />
   </ItemGroup>

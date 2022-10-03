@@ -37,8 +37,11 @@ void Validation::setupDebugMessenger(VkInstance& instance, VkDebugUtilsMessenger
     VkDebugUtilsMessengerCreateInfoEXT createInfo{};
     Validation::populateDebugMessengerCreateInfo(createInfo);
 
-    if (Validation::CreateDebugUtilsMessengerEXT(instance, &createInfo, VK_NULL_HANDLE, &debugMessenger) != VK_SUCCESS)
-        throw std::exception("Failed to setup debug messenger");
+    ASSERT_VULKAN
+    (
+        Validation::CreateDebugUtilsMessengerEXT(instance, &createInfo, VK_NULL_HANDLE, &debugMessenger) != VK_SUCCESS,
+        "Failed to setup debug messenger"
+    );
 }
 
 VKAPI_ATTR VkBool32 VKAPI_CALL Validation::debugCallback
@@ -49,9 +52,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL Validation::debugCallback
     void* pUserData
 ) {
     if (messageSeverity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT)
-        std::cerr <<
-        "Validation layer(ID: " << pCallbackData->messageIdNumber << "): " << pCallbackData->pMessage
-        << std::endl;
+        std::cerr << "Validation layer(ID: " << pCallbackData->messageIdNumber << "): " << pCallbackData->pMessage << std::endl;
 
     return VK_FALSE;
 }
