@@ -8,12 +8,16 @@
 #include <cstring>
 #include <optional>
 #include <set>
+
 #define NOMINMAX
 #include <limits>
-#include <algorithm>
 
-#define VK_USE_PLATFORM_WIN32_KHR
+#include <algorithm>
+#include <fstream>
+
+// TODO: Get glfw be able to identify Vulkan through: #define GLFW_INCLUDE_VULKAN
 #include "C:\VulkanSDK\1.3.224.1\Include\vulkan\vulkan.h"
+#define VK_USE_PLATFORM_WIN32_KHR
 #include <GLFW/glfw3.h>
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <GLFW/glfw3native.h>
@@ -41,7 +45,7 @@ public:
                 ms_graphicsFamily.has_value() &&
                 ms_presentFamily.has_value();
         }
-    };
+	};
 
     struct SwapChainSupportDetails
     {
@@ -69,6 +73,11 @@ private:
     void pickPhysicalDevice();
     void createLogicalDevice();
     void createSwapchain();
+    void createImageViews();
+	void createRenderPass();
+	static std::vector<char> loadSPRV(const std::string& fileName);
+	VkShaderModule createShaderModule(const std::vector<char>& code);
+	void createGraphicsPipeline();
     void mainLoop();
 
 private:
@@ -81,12 +90,22 @@ private:
 #else
     bool m_isDEBUG = true;
 #endif
+	VkPipeline m_graphicsPipeline;
+	VkRenderPass m_renderPass;
+	VkPipelineLayout m_pipelineLayout;
+
+    std::vector<VkImageView> m_swapchainImageViews;
+    std::vector<VkImage> m_swapchainImages;
+    VkFormat m_swapchainImageFormat;
+    VkExtent2D m_swapchainExtent;
+    VkSwapchainKHR m_swapchain;
+
     VkQueue m_presentQueue;
     VkQueue m_graphicsQueue;
-    VkSwapchainKHR m_swapchain;
     VkDevice m_device;
     VkPhysicalDevice m_physicalDevice{VK_NULL_HANDLE};
     VkSurfaceKHR m_surface;
+
     VkInstance m_instance;
     GLFWwindow* m_window;
     const uint32_t m_SCR_WIDTH = 800;
