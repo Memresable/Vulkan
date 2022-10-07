@@ -8,24 +8,18 @@
 #include <cstring>
 #include <optional>
 #include <set>
-
 #define NOMINMAX
 #include <limits>
-
 #include <algorithm>
 #include <fstream>
 
-// TODO: Get glfw be able to identify Vulkan through: #define GLFW_INCLUDE_VULKAN
-#include "C:\VulkanSDK\1.3.224.1\Include\vulkan\vulkan.h"
-#define VK_USE_PLATFORM_WIN32_KHR
+#define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
-#define GLFW_EXPOSE_NATIVE_WIN32
-#include <GLFW/glfw3native.h>
 
 #include "validation.h"
 #include "utility.h"
 
-class VulkanEngine : public Validation
+class VulkanEngine
 {
 public:
 // Main

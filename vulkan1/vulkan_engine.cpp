@@ -1,4 +1,6 @@
-#include "vulkan.h"
+#include "vulkan_engine.h"
+
+Validation c_validation;
 
 void VulkanEngine::initWindow()
 {
@@ -104,7 +106,11 @@ VulkanEngine::SwapChainSupportDetails VulkanEngine::querySwapchainSupport(const 
 
 void VulkanEngine::createInstance()
 {
-    ASSERT_VULKAN(m_isDEBUG && (checkValidationSupport(m_validationLayers) == VK_FALSE), "Validation layers requested, but not available");
+    ASSERT_VULKAN
+    (
+        m_isDEBUG && (c_validation.checkValidationSupport(m_validationLayers) == VK_FALSE),
+        "Validation layers requested, but not available"
+    );
 
     VkApplicationInfo appInfo{};
     appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -125,7 +131,7 @@ void VulkanEngine::createInstance()
     VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo{};
     if (m_isDEBUG)
     {
-        populateDebugMessengerCreateInfo(debugCreateInfo);
+        c_validation.populateDebugMessengerCreateInfo(debugCreateInfo);
         createInstance.enabledLayerCount = static_cast<uint32_t>(m_validationLayers.size());
         createInstance.ppEnabledLayerNames = m_validationLayers.data();
         createInstance.pNext = (VkDebugUtilsMessengerCreateInfoEXT*)&debugCreateInfo;
@@ -202,7 +208,7 @@ bool VulkanEngine::isDeviceSuitable(const VkPhysicalDevice& device)
         swapchainAdequate = !swapchainSupport.ms_formats.empty() && !swapchainSupport.ms_presentModes.empty();
     }
 
-    return (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
+    return (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU)
         && indices.isComplete()
         && extensionSupported
         && swapchainAdequate;
@@ -412,8 +418,8 @@ VkShaderModule VulkanEngine::createShaderModule(const std::vector<char>& code)
 
 void VulkanEngine::createGraphicsPipeline()
 {
-	auto vertexShader = loadSPRV("SPIR_V_COMPILER\\vertex.sprv");
-	auto fragmentShader = loadSPRV("SPIR_V_COMPILER\\fragment.sprv");
+	auto vertexShader = loadSPRV("SPIR_V_COMPILER/vertex.sprv");
+	auto fragmentShader = loadSPRV("SPIR_V_COMPILER/fragment.sprv");
 
 	VkShaderModule vertexModule = createShaderModule(vertexShader);
 	VkShaderModule fragmentModule = createShaderModule(fragmentShader);
@@ -551,7 +557,7 @@ VulkanEngine::VulkanEngine()
 		"Failed to create a surface window"
 	);
 
-    setupDebugMessenger(m_instance, m_debugMessenger, m_isDEBUG);
+    c_validation.setupDebugMessenger(m_instance, m_debugMessenger, m_isDEBUG);
     pickPhysicalDevice();
     createLogicalDevice();
     createSwapchain();
@@ -582,7 +588,7 @@ VulkanEngine::~VulkanEngine()
 	for (auto imageView : m_swapchainImageViews) vkDestroyImageView(m_device, imageView, nullptr);
     vkDestroySwapchainKHR(m_device, m_swapchain, nullptr);
     vkDestroyDevice(m_device, nullptr);
-    DestroyDebugUtilsMessengerEXT(m_instance, m_debugMessenger, VK_NULL_HANDLE);
+    c_validation.DestroyDebugUtilsMessengerEXT(m_instance, m_debugMessenger, VK_NULL_HANDLE);
     vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
     vkDestroyInstance(m_instance, VK_NULL_HANDLE);
 

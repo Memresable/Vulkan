@@ -1,6 +1,3 @@
-#include <iostream>
-#include <vector>
-
 #include "validation.h"
 
 bool Validation::checkValidationSupport(const std::vector<const char*>& validationLayers)
