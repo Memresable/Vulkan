@@ -1,11 +1,11 @@
 #ifndef UTILITY_H
 #define UTILITY_H
 
-#include <iostream>
+#include <stdio.h>
 
 #define ASSERT_VULKAN(istrue, message) if(istrue) \
 { \
-    std::cout << message << std::endl; \
+    printf("\n%s\n", message); \
     *(int*)0 = 0; \
 }
 
