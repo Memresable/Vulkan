@@ -89,7 +89,7 @@ VK_getRequiredExtensions(VulkanEngine* f_engine)
     
     /* total size: 3 */
     uint32_t requiredExtensionsSize = 
-        STRING_STRUCT_SIZE(f_engine->surfaceExtensions) /* (size: 2) | rank 1-2  */ +
+        ARRAY_SIZE(f_engine->surfaceExtensions.array) /* (size: 2) | rank 1-2  */ +
         1 /* extDebugUtils (size: 1) | rank 3 */;
     
     result = (string_t*)malloc(sizeof(string_t) * requiredExtensionsSize);
@@ -117,7 +117,7 @@ VK_validationSupport(VulkanEngine* f_engine)
     VkLayerProperties* availableLayers = (VkLayerProperties*)malloc(sizeof(VkLayerProperties) * layerCount);
     vkEnumerateInstanceLayerProperties(&layerCount, &availableLayers[0]);
     
-    for(uint32_t i = 0;i < STRING_STRUCT_SIZE(f_engine->validationExtensions); i++)
+    for(uint32_t i = 0;i < ARRAY_SIZE(f_engine->validationExtensions.array); i++)
     {
         for(uint32_t j = 0; j < layerCount; j++)
         {
@@ -128,8 +128,7 @@ VK_validationSupport(VulkanEngine* f_engine)
             {
                 if(f_engine->validationExtensions.array[i][k] == availableLayers[j].layerName[k])
                 {
-                    if((f_engine->validationExtensions.array[i][k+1] == '\0') &&
-                       (availableLayers[j].layerName[k+1] == '\0'))
+                    if((f_engine->validationExtensions.array[i][k+1] == '\0') && (availableLayers[j].layerName[k+1] == '\0'))
                     {
                         return(true);
                     }
@@ -232,7 +231,7 @@ VK_createInstance(VulkanEngine* f_engine)
     VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo = {};
     if(globalEnableValidationLayers)
     {
-        createInfo.enabledLayerCount = (uint32_t)STRING_STRUCT_SIZE(f_engine->validationExtensions);
+        createInfo.enabledLayerCount = (uint32_t)ARRAY_SIZE(f_engine->validationExtensions.array);
         createInfo.ppEnabledLayerNames = f_engine->validationExtensions.array;
         
         VK_populateDebugMessengerCreateInfo(debugCreateInfo);
@@ -340,46 +339,93 @@ VK_pickPhysicalDevice(VulkanEngine* f_engine)
     MEMRE_ASSERT(f_engine->physicalDevice == VK_NULL_HANDLE, "Failed to find a suitable GPU\n");
 }
 
-// An alternative to std::set in C++
+// this will be moved to it's own file
+// an alternative to std::set in C++, massive mess but it works!
 template<typename T>
 struct UniqueArray
 {
     T* array;
+    bool* isIndexDuplicated;
     uint32_t size;
 };
-
 template<typename T>
-bool
-checkForArrayDuplicates(T* f_array, T* f_arrayLookup, uint32_t f_arraySize, uint32_t f_currentIndex)
+struct CachedUniqueNumber
 {
-    for(uint32_t j = 0; j < f_arraySize; j++)
+    T number;
+    bool isDuplicated;
+};
+template<typename T>
+void
+checkForArrayDuplicates(T* f_uniqueArray, bool* f_isIndexDuplicated,
+                        T* f_arrayLookup, uint32_t f_arraySize)
+{
+    // Initialization stage
+    CachedUniqueNumber<T>* uniqueNumberList = (CachedUniqueNumber<T>*)malloc(sizeof(CachedUniqueNumber<T>) * f_arraySize);
+    for(uint32_t i = 0; i < f_arraySize; i++)
     {
-        for(uint32_t i = 0; i < f_arraySize; i++)
+        uniqueNumberList[i].number = 0;
+        uniqueNumberList[i].isDuplicated = false;
+    }
+    for(uint32_t i = 0; i < f_arraySize; i++)
+    {
+        uniqueNumberList[i].number = f_arrayLookup[i];
+    }
+    
+    // Checking Stage
+    uint32_t reducedSize = 0;
+    for(uint32_t i = 0; i < f_arraySize; i++)
+    {
+        if(f_arrayLookup[i] == uniqueNumberList[i+1].number)
         {
-            if(f_array[j] == f_arrayLookup[i])
-            {
-                return(false);
-            }
+            uniqueNumberList[i+1].number = 0;
+            uniqueNumberList[i+1].isDuplicated = true;
+            continue;
+        }
+        reducedSize++;
+    }
+    
+    for(uint32_t i = 0; i < f_arraySize; i++)
+    {
+        if(!uniqueNumberList[i].isDuplicated)
+        {
+            f_uniqueArray[i] = uniqueNumberList[i].number;
+            f_isIndexDuplicated[i] = false;
+        }
+        else
+        {
+            f_isIndexDuplicated[i] = true;
         }
     }
-    f_array[f_currentIndex] = f_arrayLookup[f_currentIndex];
-    return(true);
 }
-
-// TODO: remove the template and replace it with something like size_t if possible
 template<typename T>
 UniqueArray<T>
 removeDuplicateArrayValues(T* f_array, uint32_t f_arraySize)
 {
+    UniqueArray<T> temp = {};
+    temp.array = (T*)calloc(1, sizeof(T)*f_arraySize);
+    temp.isIndexDuplicated = (bool*)calloc(1, sizeof(bool)*f_arraySize);
+    temp.size = f_arraySize;
+    checkForArrayDuplicates<T>(temp.array, temp.isIndexDuplicated, f_array, f_arraySize);
+    
     UniqueArray<T> result = {};
-    result.array = (T*)malloc(sizeof(T) * f_arraySize);
-    for(uint32_t i = 0; i < f_arraySize; i++)
+    uint32_t totalActualArraySize = 0;
+    for(uint32_t i = 0; i < temp.size; i++)
     {
-        if(checkForArrayDuplicates<T>(result.array, f_array, ARRAY_SIZE(f_array), i) == true)
+        if(!temp.isIndexDuplicated[i])
         {
-            result.size++;
+            totalActualArraySize++;
         }
     }
+    result.array = (T*)calloc(1, sizeof(T)*totalActualArraySize);
+    for(uint32_t index = 0, realIndex = 0; index < temp.size; index++)
+    {
+        if(!temp.isIndexDuplicated[index])
+        {
+            result.array[realIndex] = temp.array[index];
+            realIndex++;
+        }
+    }
+    result.size = totalActualArraySize;
     return(result);
 }
 
@@ -387,7 +433,11 @@ void
 VK_createLogicalDevice(VulkanEngine* f_engine)
 {
     QueueFamilyIndices indices = VK_findQueueFamilies(f_engine->physicalDevice, f_engine->surface);
-    UniqueArray<uint32_t> uniqueIndices = removeDuplicateArrayValues<uint32_t>(*indices.array, ARRAY_SIZE(indices.array));
+    
+    uint32_t* copiedIndicesArray = (uint32_t*)malloc(sizeof(uint32_t) * ARRAY_SIZE(indices.array));
+    for(uint32_t i = 0; i < ARRAY_SIZE(indices.array); i++) copiedIndicesArray[i] = *indices.array[i];
+    
+    UniqueArray<uint32_t> uniqueIndices = removeDuplicateArrayValues<uint32_t>(copiedIndicesArray, ARRAY_SIZE(indices.array));
     
     VkDeviceQueueCreateInfo* queueCreateInfos =
     (VkDeviceQueueCreateInfo*)malloc(sizeof(VkDeviceQueueCreateInfo) * ARRAY_SIZE(indices.array));
@@ -411,10 +461,10 @@ VK_createLogicalDevice(VulkanEngine* f_engine)
     createInfo.pQueueCreateInfos = &queueCreateInfos[0];
     createInfo.pEnabledFeatures = &deviceFeatures;
     
-    // TODO: check if the GPU i'm currently using requires
+    // TODO: check if the GPU i'm currently using requires this
     if(globalEnableValidationLayers)
     {
-        createInfo.enabledLayerCount = (uint32_t)STRING_STRUCT_SIZE(f_engine->validationExtensions);
+        createInfo.enabledLayerCount = (uint32_t)ARRAY_SIZE(f_engine->validationExtensions.array);
         createInfo.ppEnabledLayerNames = &f_engine->validationExtensions.array[0];
     }
     
