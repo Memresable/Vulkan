@@ -4,25 +4,25 @@
 #include <stdlib.h>
 
 #include "../utilities/types.h"
-
-template<typename T>
-struct UniqueArray
-{
-    T* array;
-    bool* isIndexDuplicated;
-    uint32_t size;
-};
+#include "../utilities/general_utilities.h"
 
 // ----------------------------------------------------------------
 //                          UNIQUE INTEGERS
 // ----------------------------------------------------------------
-struct CachedUniqueNumber
+
+typedef struct
+{
+    uint32_t* array;
+    int* isIndexDuplicated;
+    uint32_t size;
+} UniqueIntegerArray;
+typedef struct
 {
     uint32_t number;
-    bool isDuplicated;
-};
+    int isDuplicated;
+} CachedUniqueNumber;
 void
-checkForIntegerDuplicates(uint32_t* f_uniqueArray, bool* f_isIndexDuplicated,
+checkForIntegerDuplicates(uint32_t* f_uniqueArray, int* f_isIndexDuplicated,
                           uint32_t* f_arrayLookup, uint32_t f_arraySize)
 {
     // Initialization stage
@@ -30,7 +30,7 @@ checkForIntegerDuplicates(uint32_t* f_uniqueArray, bool* f_isIndexDuplicated,
     for(uint32_t i = 0; i < f_arraySize; i++)
     {
         uniqueNumberList[i].number = 0;
-        uniqueNumberList[i].isDuplicated = false;
+        uniqueNumberList[i].isDuplicated = MEMRE_FALSE;
     }
     for(uint32_t i = 0; i < f_arraySize; i++)
     {
@@ -44,7 +44,7 @@ checkForIntegerDuplicates(uint32_t* f_uniqueArray, bool* f_isIndexDuplicated,
         if(f_arrayLookup[i] == uniqueNumberList[i+1].number)
         {
             uniqueNumberList[i+1].number = 0;
-            uniqueNumberList[i+1].isDuplicated = true;
+            uniqueNumberList[i+1].isDuplicated = MEMRE_TRUE;
             continue;
         }
         reducedSize++;
@@ -54,24 +54,24 @@ checkForIntegerDuplicates(uint32_t* f_uniqueArray, bool* f_isIndexDuplicated,
         if(!uniqueNumberList[i].isDuplicated)
         {
             f_uniqueArray[i] = uniqueNumberList[i].number;
-            f_isIndexDuplicated[i] = false;
+            f_isIndexDuplicated[i] = MEMRE_FALSE;
         }
         else
         {
-            f_isIndexDuplicated[i] = true;
+            f_isIndexDuplicated[i] = MEMRE_TRUE;
         }
     }
 }
-UniqueArray<uint32_t>
+UniqueIntegerArray
 createUniqueIntegerArray(uint32_t* f_array, uint32_t f_arraySize)
 {
-    UniqueArray<uint32_t> temp = {};
+    UniqueIntegerArray temp = {0};
     temp.array = (uint32_t*)calloc(1, sizeof(uint32_t)*f_arraySize);
-    temp.isIndexDuplicated = (bool*)calloc(1, sizeof(bool)*f_arraySize);
+    temp.isIndexDuplicated = (int*)calloc(1, sizeof(int)*f_arraySize);
     temp.size = f_arraySize;
     checkForIntegerDuplicates(temp.array, temp.isIndexDuplicated, f_array, f_arraySize);
     
-    UniqueArray<uint32_t> result = {};
+    UniqueIntegerArray result = {0};
     uint32_t totalActualArraySize = 0;
     for(uint32_t i = 0; i < temp.size; i++)
     {
@@ -93,16 +93,24 @@ createUniqueIntegerArray(uint32_t* f_array, uint32_t f_arraySize)
     return(result);
 }
 
+// TODO: Test if unique strings actually do work
 // ----------------------------------------------------------------
 //                          UNIQUE STRINGS
 // ----------------------------------------------------------------
-struct CachedUniqueString
+
+typedef struct
+{
+    string_t* array;
+    int* isIndexDuplicated;
+    uint32_t size;
+} UniqueStringArray;
+typedef struct
 {
     string_t string;
-    bool isDuplicated;
-};
+    int isDuplicated;
+} CachedUniqueString;
 void
-checkForStringDuplicates(string_t* f_uniqueArray, bool* f_isIndexDuplicated,
+checkForStringDuplicates(string_t* f_uniqueArray, int* f_isIndexDuplicated,
                          string_t* f_arrayLookup, uint32_t f_arraySize)
 {
     // Initialization stage
@@ -110,7 +118,7 @@ checkForStringDuplicates(string_t* f_uniqueArray, bool* f_isIndexDuplicated,
     for(uint32_t i = 0; i < f_arraySize; i++)
     {
         uniqueNumberList[i].string = 0;
-        uniqueNumberList[i].isDuplicated = false;
+        uniqueNumberList[i].isDuplicated = MEMRE_FALSE;
     }
     for(uint32_t i = 0; i < f_arraySize; i++)
     {
@@ -123,8 +131,8 @@ checkForStringDuplicates(string_t* f_uniqueArray, bool* f_isIndexDuplicated,
     {
         if(compareTwoStrings(f_arrayLookup[i], uniqueNumberList[i+1].string))
         {
-            uniqueNumberList[i+1].string = nullptr;
-            uniqueNumberList[i+1].isDuplicated = true;
+            uniqueNumberList[i+1].string = 0;
+            uniqueNumberList[i+1].isDuplicated = MEMRE_TRUE;
             continue;
         }
         reducedSize++;
@@ -134,24 +142,24 @@ checkForStringDuplicates(string_t* f_uniqueArray, bool* f_isIndexDuplicated,
         if(!uniqueNumberList[i].isDuplicated)
         {
             f_uniqueArray[i] = uniqueNumberList[i].string;
-            f_isIndexDuplicated[i] = false;
+            f_isIndexDuplicated[i] = MEMRE_FALSE;
         }
         else
         {
-            f_isIndexDuplicated[i] = true;
+            f_isIndexDuplicated[i] = MEMRE_TRUE;
         }
     }
 }
-UniqueArray<string_t>
+UniqueStringArray
 createUniqueStringArray(string_t* f_array, uint32_t f_arraySize)
 {
-    UniqueArray<string_t> temp = {};
+    UniqueStringArray temp = {0};
     temp.array = (string_t*)calloc(1, sizeof(string_t)*f_arraySize);
-    temp.isIndexDuplicated = (bool*)calloc(1, sizeof(bool)*f_arraySize);
+    temp.isIndexDuplicated = (int*)calloc(1, sizeof(int)*f_arraySize);
     temp.size = f_arraySize;
     checkForStringDuplicates(temp.array, temp.isIndexDuplicated, f_array, f_arraySize);
     
-    UniqueArray<string_t> result = {};
+    UniqueStringArray result = {0};
     uint32_t totalActualArraySize = 0;
     for(uint32_t i = 0; i < temp.size; i++)
     {

@@ -34,7 +34,7 @@ wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdS
 {
 	const wchar_t* className = L"Main application";
     
-	WNDCLASS window_class = {};
+	WNDCLASS window_class = {0};
 	window_class.lpfnWndProc = WindowProc;
 	window_class.hInstance = hInstance;
 	window_class.lpszClassName = className;
@@ -59,10 +59,10 @@ wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdS
     
 	ShowWindow(hwnd, nCmdShow);
     
-    VulkanEngine engine = {};
+    VulkanEngine engine = {0};
     VK_initialize(&engine, &hwnd);
     
-	MSG msg = {};
+	MSG msg = {0};
 	while(GetMessage(&msg, NULL, 0, 0) > 0)
 	{
 		TranslateMessage(&msg);

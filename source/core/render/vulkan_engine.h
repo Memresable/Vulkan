@@ -16,19 +16,18 @@ const uint32_t globalWidth = 800;
 const uint32_t globalHeight = 600;
 
 #ifdef NDEBUG
-const bool globalEnableValidationLayers = false;
+const int globalEnableValidationLayers = MEMRE_FALSE;
 #else
-const bool globalEnableValidationLayers = true;
+const int globalEnableValidationLayers = MEMRE_TRUE;
 #endif
 
-// NOTE: use this struct more often
-struct VulkanExtensionsData
+typedef struct
 {
     string_t* extensions;
     uint32_t size;
-};
+} VulkanExtensionsData;
 
-struct VulkanSurface
+typedef struct
 {
     union
     {
@@ -42,9 +41,9 @@ struct VulkanSurface
             string_t array[2];
         };
     };
-};
+} VulkanSurface;
 
-struct VulkanSwapChain
+typedef struct
 {
     union
     {
@@ -57,9 +56,9 @@ struct VulkanSwapChain
             string_t array[1];
         };
     };
-};
+} VulkanSwapchain;
 
-struct VulkanValidationLayers
+typedef struct
 {
     union
     {
@@ -72,9 +71,9 @@ struct VulkanValidationLayers
             string_t array[1];
         };
     };
-};
+} VulkanValidationLayers;
 
-struct VulkanEngine
+typedef struct
 {
 	VkInstance instance;
     
@@ -85,48 +84,49 @@ struct VulkanEngine
     VulkanSurface surfaceExtensions;
     VkSurfaceKHR surface;
     
-    VulkanSwapChain swapchainExtensions;
+    VulkanSwapchain swapchainExtensions;
     
     VkPhysicalDevice physicalDevice;
     VkDevice device;
     
     VkQueue graphicsQueue;
     VkQueue presentQueue;
-};
+} VulkanEngine;
 
 // TODO: make this better
 VulkanExtensionsData
 VK_getRequiredExtensions(VulkanEngine* f_engine)
 {
-    string_t* result;
+    string_t* array;
     
     /* total size: 3 */
     uint32_t requiredExtensionsSize = 
         ARRAY_SIZE(f_engine->surfaceExtensions.array) /* (size: 2) | rank 1-2  */ +
         1 /* extDebugUtils (size: 1) | rank 3 */;
     
-    result = (string_t*)malloc(sizeof(string_t) * requiredExtensionsSize);
+    array = (string_t*)malloc(sizeof(string_t) * requiredExtensionsSize);
     
     for(uint32_t i = 0; i < requiredExtensionsSize; i++)
     {
         if(i < 2)
         {
-            result[i] = f_engine->surfaceExtensions.array[i];
+            array[i] = f_engine->surfaceExtensions.array[i];
         }
         if(i == 2)
         {
-            result[i] = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
+            array[i] = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
         }
     }
     
-    return{result, requiredExtensionsSize};
+    VulkanExtensionsData result = {array, requiredExtensionsSize};
+    return(result);
 }
 
-bool
+int
 VK_validationSupport(VulkanEngine* f_engine)
 {
     uint32_t layerCount = 0;
-    vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
+    vkEnumerateInstanceLayerProperties(&layerCount, NULL);
     VkLayerProperties* availableLayers = (VkLayerProperties*)malloc(sizeof(VkLayerProperties) * layerCount);
     vkEnumerateInstanceLayerProperties(&layerCount, &availableLayers[0]);
     
@@ -136,11 +136,11 @@ VK_validationSupport(VulkanEngine* f_engine)
         {
             if(compareTwoStrings(f_engine->validationExtensions.array[i], availableLayers[j].layerName))
             {
-                return(true);
+                return(MEMRE_TRUE);
             }
         }
     }
-    return(false);
+    return(MEMRE_FALSE);
 }
 
 static VKAPI_ATTR VkBool32 VKAPI_CALL
@@ -163,7 +163,7 @@ VK_createDebugUtilsMessengerEXT(VkInstance instance,
 {
     PFN_vkCreateDebugUtilsMessengerEXT function =
     (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
-    if(function != nullptr)
+    if(function != NULL)
     {
         return(function(instance, pCreateInfo, pAllocator, pDebugMessenger));
     }
@@ -176,24 +176,24 @@ VK_destroyDebugUtilsMessengerEXT(VulkanEngine* f_engine,
 {
     PFN_vkDestroyDebugUtilsMessengerEXT function =
     (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(f_engine->instance, "vkDestroyDebugUtilsMessengerEXT");
-    if(function != nullptr)
+    if(function != NULL)
     {
         function(f_engine->instance, f_engine->debugMessenger, pAllocator);
     }
 }
 
 void
-VK_populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo)
+VK_populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT* createInfo)
 {
-    createInfo = {};
-    createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-    createInfo.messageSeverity =
+    *createInfo = (VkDebugUtilsMessengerCreateInfoEXT){0};
+    createInfo->sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+    createInfo->messageSeverity =
         VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | 
         VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-    createInfo.messageType = 
+    createInfo->messageType = 
         VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | 
         VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-    createInfo.pfnUserCallback = VK_debugCallback;
+    createInfo->pfnUserCallback = VK_debugCallback;
 }
 
 void
@@ -201,10 +201,11 @@ VK_setupDebugMessenger(VulkanEngine* f_engine)
 {
     if(!globalEnableValidationLayers) return;
     
-    VkDebugUtilsMessengerCreateInfoEXT createInfo = {};
-    VK_populateDebugMessengerCreateInfo(createInfo);
+    VkDebugUtilsMessengerCreateInfoEXT createInfo = {0};
+    VK_populateDebugMessengerCreateInfo(&createInfo);
     
-    MEMRE_ASSERT(VK_createDebugUtilsMessengerEXT(f_engine->instance, &createInfo, nullptr, &f_engine->debugMessenger) != VK_SUCCESS,
+    MEMRE_ASSERT(VK_createDebugUtilsMessengerEXT(f_engine->instance, &createInfo, NULL, 
+                                                 &f_engine->debugMessenger) != VK_SUCCESS,
                  "Failed to setup a debug messenger\n");
 }
 
@@ -214,7 +215,7 @@ VK_createInstance(VulkanEngine* f_engine)
     MEMRE_ASSERT(!VK_validationSupport(f_engine) && globalEnableValidationLayers,
                  "Validation Layers Requested, but not available\n");
     
-	VkApplicationInfo appInfo = {};
+	VkApplicationInfo appInfo = {0};
 	appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
 	appInfo.pApplicationName = APPLICATION_NAME;
 	appInfo.applicationVersion = VK_MAKE_VERSION(1, 2, 0);
@@ -222,7 +223,7 @@ VK_createInstance(VulkanEngine* f_engine)
 	appInfo.engineVersion = VK_MAKE_VERSION(1, 2, 0);
 	appInfo.apiVersion = VK_API_VERSION_1_2;
     
-	VkInstanceCreateInfo createInfo = {};
+	VkInstanceCreateInfo createInfo = {0};
 	createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
 	createInfo.pApplicationInfo = &appInfo;
     
@@ -230,26 +231,26 @@ VK_createInstance(VulkanEngine* f_engine)
 	createInfo.enabledExtensionCount = requiredExtensions.size;
 	createInfo.ppEnabledExtensionNames = requiredExtensions.extensions;
     
-    VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo = {};
+    VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo = {0};
     if(globalEnableValidationLayers)
     {
         createInfo.enabledLayerCount = (uint32_t)ARRAY_SIZE(f_engine->validationExtensions.array);
         createInfo.ppEnabledLayerNames = f_engine->validationExtensions.array;
         
-        VK_populateDebugMessengerCreateInfo(debugCreateInfo);
+        VK_populateDebugMessengerCreateInfo(&debugCreateInfo);
         createInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT*)&debugCreateInfo;
     }
     
-    MEMRE_ASSERT(vkCreateInstance(&createInfo, nullptr, &f_engine->instance) != VK_SUCCESS,
+    MEMRE_ASSERT(vkCreateInstance(&createInfo, NULL, &f_engine->instance) != VK_SUCCESS,
                  "Failed to create a Vulkan instance\n");
     
     uint32_t extensionCount = 0;
-    vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
+    vkEnumerateInstanceExtensionProperties(NULL, &extensionCount, NULL);
     VkExtensionProperties* extensionProperties = (VkExtensionProperties*)malloc(sizeof(VkExtensionProperties) * extensionCount);
-    vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, &extensionProperties[0]);
+    vkEnumerateInstanceExtensionProperties(NULL, &extensionCount, &extensionProperties[0]);
 }
 
-struct QueueFamilyIndices
+typedef struct
 {
     union
     {
@@ -263,15 +264,15 @@ struct QueueFamilyIndices
             uint32_t* array[2];
         };
     };
-};
+} QueueFamilyIndices;
 
 QueueFamilyIndices
 VK_findQueueFamilies(VkPhysicalDevice f_device, VkSurfaceKHR f_surface)
 {
-    QueueFamilyIndices result = {};
+    QueueFamilyIndices result = {0};
     
     uint32_t queueFamilyCount = 0;
-    vkGetPhysicalDeviceQueueFamilyProperties(f_device, &queueFamilyCount, nullptr);
+    vkGetPhysicalDeviceQueueFamilyProperties(f_device, &queueFamilyCount, NULL);
     VkQueueFamilyProperties* queueFamilies = (VkQueueFamilyProperties*)malloc(sizeof(VkQueueFamilyProperties) * queueFamilyCount);
     vkGetPhysicalDeviceQueueFamilyProperties(f_device, &queueFamilyCount, &queueFamilies[0]);
     
@@ -282,7 +283,7 @@ VK_findQueueFamilies(VkPhysicalDevice f_device, VkSurfaceKHR f_surface)
             result.graphicsFamily = (uint32_t*)malloc(sizeof(uint32_t));
             *result.graphicsFamily = i;
             
-            VkBool32 presentSupport = false;
+            VkBool32 presentSupport = MEMRE_FALSE;
             vkGetPhysicalDeviceSurfaceSupportKHR(f_device, i, f_surface, &presentSupport);
             if(presentSupport)
             {
@@ -295,13 +296,13 @@ VK_findQueueFamilies(VkPhysicalDevice f_device, VkSurfaceKHR f_surface)
     return(result);
 }
 
-bool
+int
 checkDeviceExtensionSupport(VulkanEngine* f_engine, VkPhysicalDevice f_device)
 {
     uint32_t extensionCount;
-    vkEnumerateDeviceExtensionProperties(f_device, nullptr, &extensionCount, nullptr);
+    vkEnumerateDeviceExtensionProperties(f_device, NULL, &extensionCount, NULL);
     VkExtensionProperties* availableExtensions = (VkExtensionProperties*)malloc(sizeof(VkExtensionProperties) * extensionCount);
-    vkEnumerateDeviceExtensionProperties(f_device, nullptr, &extensionCount, &availableExtensions[0]);
+    vkEnumerateDeviceExtensionProperties(f_device, NULL, &extensionCount, &availableExtensions[0]);
     
     for(uint32_t i = 0;i < ARRAY_SIZE(f_engine->swapchainExtensions.array); i++)
     {
@@ -309,14 +310,14 @@ checkDeviceExtensionSupport(VulkanEngine* f_engine, VkPhysicalDevice f_device)
         {
             if(compareTwoStrings(f_engine->swapchainExtensions.array[i], availableExtensions[j].extensionName))
             {
-                return(true);
+                return(MEMRE_TRUE);
             }
         }
     }
-    return(false);
+    return(MEMRE_FALSE);
 }
 
-bool
+int
 VK_isDeviceSuitable(VulkanEngine* f_engine, VkPhysicalDevice f_device)
 {
     VkPhysicalDeviceProperties deviceProperties;
@@ -326,21 +327,21 @@ VK_isDeviceSuitable(VulkanEngine* f_engine, VkPhysicalDevice f_device)
     
     QueueFamilyIndices indices = VK_findQueueFamilies(f_device, f_engine->surface);
     
-    bool extensionsSupported = checkDeviceExtensionSupport(f_engine, f_device);
+    int extensionsSupported = checkDeviceExtensionSupport(f_engine, f_device);
     
-    return((deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) &&
-           (indices.graphicsFamily != nullptr));
+    return((indices.graphicsFamily != NULL) &&
+           (extensionsSupported));
 }
 
 void
 VK_createSurface(VulkanEngine* f_engine)
 {
-    VkWin32SurfaceCreateInfoKHR createInfo{};
+    VkWin32SurfaceCreateInfoKHR createInfo = {0};
     createInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
     createInfo.hwnd = *f_engine->mainWindowHandle;
-    createInfo.hinstance = GetModuleHandle(nullptr);
+    createInfo.hinstance = GetModuleHandle(NULL);
     
-    MEMRE_ASSERT(vkCreateWin32SurfaceKHR(f_engine->instance, &createInfo, nullptr, &f_engine->surface) != VK_SUCCESS,
+    MEMRE_ASSERT(vkCreateWin32SurfaceKHR(f_engine->instance, &createInfo, NULL, &f_engine->surface) != VK_SUCCESS,
                  "Failed to create window surface\n");
 }
 
@@ -348,7 +349,7 @@ void
 VK_pickPhysicalDevice(VulkanEngine* f_engine)
 {
     uint32_t deviceCount = 0;
-    vkEnumeratePhysicalDevices(f_engine->instance, &deviceCount, nullptr);
+    vkEnumeratePhysicalDevices(f_engine->instance, &deviceCount, NULL);
     MEMRE_ASSERT(!deviceCount, "Failed to find vulkan compatible GPUs\n");
     VkPhysicalDevice* devices = (VkPhysicalDevice*)malloc(sizeof(VkPhysicalDevice) * deviceCount);
     vkEnumeratePhysicalDevices(f_engine->instance, &deviceCount, &devices[0]);
@@ -372,7 +373,7 @@ VK_createLogicalDevice(VulkanEngine* f_engine)
     uint32_t* copiedIndicesArray = (uint32_t*)malloc(sizeof(uint32_t) * ARRAY_SIZE(indices.array));
     for(uint32_t i = 0; i < ARRAY_SIZE(indices.array); i++) copiedIndicesArray[i] = *indices.array[i];
     
-    UniqueArray<uint32_t> uniqueIndices = createUniqueIntegerArray(copiedIndicesArray, ARRAY_SIZE(indices.array));
+    UniqueIntegerArray uniqueIndices = createUniqueIntegerArray(copiedIndicesArray, ARRAY_SIZE(indices.array));
     
     VkDeviceQueueCreateInfo* queueCreateInfos =
     (VkDeviceQueueCreateInfo*)malloc(sizeof(VkDeviceQueueCreateInfo) * ARRAY_SIZE(indices.array));
@@ -380,7 +381,7 @@ VK_createLogicalDevice(VulkanEngine* f_engine)
     float queuePriority = 1.f;
     for(uint32_t i = 0; i < uniqueIndices.size; i++)
     {
-        VkDeviceQueueCreateInfo queueCreateInfo = {};
+        VkDeviceQueueCreateInfo queueCreateInfo = {0};
         queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
         queueCreateInfo.queueFamilyIndex = (uint32_t)uniqueIndices.array[i];
         queueCreateInfo.queueCount = 1;
@@ -388,13 +389,15 @@ VK_createLogicalDevice(VulkanEngine* f_engine)
         queueCreateInfos[i] = queueCreateInfo;
     }
     
-    VkPhysicalDeviceFeatures deviceFeatures = {};
+    VkPhysicalDeviceFeatures deviceFeatures = {0};
     
-    VkDeviceCreateInfo createInfo = {};
+    VkDeviceCreateInfo createInfo = {0};
     createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
     createInfo.queueCreateInfoCount = (uint32_t)uniqueIndices.size;
     createInfo.pQueueCreateInfos = &queueCreateInfos[0];
     createInfo.pEnabledFeatures = &deviceFeatures;
+    createInfo.enabledLayerCount = (uint32_t)ARRAY_SIZE(f_engine->swapchainExtensions.array);
+    createInfo.ppEnabledExtensionNames = &f_engine->swapchainExtensions.array[0];
     
     // TODO: check if the GPU i'm currently using requires this
     if(globalEnableValidationLayers)
@@ -403,7 +406,7 @@ VK_createLogicalDevice(VulkanEngine* f_engine)
         createInfo.ppEnabledLayerNames = &f_engine->validationExtensions.array[0];
     }
     
-    MEMRE_ASSERT(vkCreateDevice(f_engine->physicalDevice, &createInfo, nullptr, &f_engine->device) != VK_SUCCESS,
+    MEMRE_ASSERT(vkCreateDevice(f_engine->physicalDevice, &createInfo, NULL, &f_engine->device) != VK_SUCCESS,
                  "Failed to create logical device\n");
     
     vkGetDeviceQueue(f_engine->device, *indices.graphicsFamily, 0, &f_engine->graphicsQueue);
@@ -414,15 +417,13 @@ void
 VK_initialize(VulkanEngine* f_engine, HWND* f_mainWindowHandle)
 {
     // Create an instance
-	f_engine->instance = {};
+	f_engine->instance = 0;
     
     // Surface extensions
-    f_engine->surfaceExtensions = {};
 	f_engine->surfaceExtensions.extSurface = VK_KHR_SURFACE_EXTENSION_NAME;
 	f_engine->surfaceExtensions.extWin32Surface = VK_KHR_WIN32_SURFACE_EXTENSION_NAME;
     
     // Validation layer extensions
-    f_engine->validationExtensions = {};
     f_engine->validationExtensions.extValidation = "VK_LAYER_KHRONOS_validation";
     
     // Take windows's handle address
@@ -442,11 +443,11 @@ VK_initialize(VulkanEngine* f_engine, HWND* f_mainWindowHandle)
 void
 VK_cleanup(VulkanEngine* f_engine)
 {
-    vkDestroyDevice(f_engine->device, nullptr);
+    vkDestroyDevice(f_engine->device, NULL);
     if(globalEnableValidationLayers)
     {
-        VK_destroyDebugUtilsMessengerEXT(f_engine, nullptr);
+        VK_destroyDebugUtilsMessengerEXT(f_engine, NULL);
     }
-    vkDestroySurfaceKHR(f_engine->instance, f_engine->surface, nullptr);
-    vkDestroyInstance(f_engine->instance, nullptr);
+    vkDestroySurfaceKHR(f_engine->instance, f_engine->surface, NULL);
+    vkDestroyInstance(f_engine->instance, NULL);
 }
