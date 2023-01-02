@@ -7,6 +7,9 @@
 
 #include "core/render/vulkan_engine.h"
 
+uint32_t globalWindowWidth = 800;
+uint32_t globalWindowHeight = 600;
+
 LRESULT CALLBACK
 WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
@@ -60,7 +63,7 @@ wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdS
 	ShowWindow(hwnd, nCmdShow);
     
     VulkanEngine engine = {0};
-    VK_initialize(&engine, &hwnd);
+    VK_initialize(&engine, &hwnd, &globalWindowWidth, &globalWindowHeight);
     
 	MSG msg = {0};
 	while(GetMessage(&msg, NULL, 0, 0) > 0)

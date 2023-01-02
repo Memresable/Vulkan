@@ -93,7 +93,7 @@ createUniqueIntegerArray(uint32_t* f_array, uint32_t f_arraySize)
     return(result);
 }
 
-// TODO: Test if unique strings actually do work
+// TODO: Test if unique strings actually behave correctly
 // ----------------------------------------------------------------
 //                          UNIQUE STRINGS
 // ----------------------------------------------------------------

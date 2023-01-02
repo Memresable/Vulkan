@@ -12,10 +12,14 @@
 #define APPLICATION_NAME "MemreVK1"
 #define ENGINE_NAME "MemrEngine"
 
-const uint32_t globalWidth = 800;
-const uint32_t globalHeight = 600;
-
 const int globalEnableValidationLayers = MEMRE_TRUE;
+
+typedef struct
+{
+    HWND* handle;
+    uint32_t* width;
+    uint32_t* height;
+} WindowInfo;
 
 typedef struct
 {
@@ -76,7 +80,7 @@ typedef struct
     VulkanValidationLayers validationExtensions;
     VkDebugUtilsMessengerEXT debugMessenger;
     
-    HWND* mainWindowHandle;
+    WindowInfo window;
     VulkanSurface surfaceExtensions;
     VkSurfaceKHR surface;
     
@@ -92,6 +96,7 @@ typedef struct
     VkFormat swapchainImageFormat;
     VkImage* swapchainImages;
     uint32_t swapchainImagesArraySize;
+    VkImageView* swapchainImageViews;
 } VulkanEngine;
 
 // TODO: make this better
@@ -150,7 +155,7 @@ VK_debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
                  const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
                  void* pUserData)
 {
-    char buffer[8192];
+    char buffer[8192]; // i wonder what's the biggest message vulkan could output?
     sprintf(buffer, "[Validation layer]: %s\n", pCallbackData->pMessage);
     OutputDebugStringA(buffer);
     return(VK_FALSE);
@@ -170,7 +175,6 @@ VK_createDebugUtilsMessengerEXT(VkInstance instance,
     }
     return(VK_ERROR_EXTENSION_NOT_PRESENT);
 }
-
 void
 VK_destroyDebugUtilsMessengerEXT(VulkanEngine* f_engine,
                                  const VkAllocationCallbacks* pAllocator)
@@ -402,7 +406,6 @@ VK_chooseSwapExtent(VkSurfaceCapabilitiesKHR* f_capabilities, uint32_t f_windowW
     else
     {
         VkExtent2D actualExtent = {f_windowWidth, f_windowHeight};
-        
         actualExtent.width =
         (actualExtent.width < f_capabilities->minImageExtent.width) ? f_capabilities->maxImageExtent.width : actualExtent.width;
         actualExtent.height =
@@ -417,7 +420,7 @@ VK_createSurface(VulkanEngine* f_engine)
 {
     VkWin32SurfaceCreateInfoKHR createInfo = {0};
     createInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
-    createInfo.hwnd = *f_engine->mainWindowHandle;
+    createInfo.hwnd = *f_engine->window.handle;
     createInfo.hinstance = GetModuleHandle(NULL);
     
     MEMRE_ASSERT(vkCreateWin32SurfaceKHR(f_engine->instance, &createInfo, NULL, &f_engine->surface) != VK_SUCCESS,
@@ -493,13 +496,13 @@ VK_createLogicalDevice(VulkanEngine* f_engine)
 }
 
 void
-VK_createSwapchain(VulkanEngine* f_engine, uint32_t f_windowWidth, uint32_t f_windowHeight)
+VK_createSwapchain(VulkanEngine* f_engine)
 {
     SwapChainSupportDetails swapchainSupport = VK_querySwapchainSupport(f_engine->physicalDevice, f_engine->surface);
     
     VkSurfaceFormatKHR surfaceFormat = VK_chooseSwapSurfaceFormat(swapchainSupport.formats, swapchainSupport.formatsArraySize);
     VkPresentModeKHR presentMode = VK_PRESENT_MODE_FIFO_KHR;
-    VkExtent2D extent = VK_chooseSwapExtent(&swapchainSupport.capabilities, f_windowWidth, f_windowHeight);
+    VkExtent2D extent = VK_chooseSwapExtent(&swapchainSupport.capabilities, *f_engine->window.width, *f_engine->window.height);
     
     uint32_t imageCount = swapchainSupport.capabilities.minImageCount + 1;
     if((swapchainSupport.capabilities.maxImageCount > 0) && (imageCount > swapchainSupport.capabilities.maxImageCount))
@@ -551,10 +554,41 @@ VK_createSwapchain(VulkanEngine* f_engine, uint32_t f_windowWidth, uint32_t f_wi
 }
 
 void
-VK_initialize(VulkanEngine* f_engine, HWND* f_mainWindowHandle)
+VK_createImageViews(VulkanEngine* f_engine)
+{
+    uint32_t swapchainImagesSize = f_engine->swapchainImagesArraySize;
+    f_engine->swapchainImageViews = (VkImageView*)malloc(sizeof(VkImageView)*swapchainImagesSize);
+    for(uint32_t i = 0; i < swapchainImagesSize; i++)
+    {
+        VkImageViewCreateInfo createInfo = {0};
+        createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        createInfo.image = f_engine->swapchainImages[i];
+        createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        createInfo.format = f_engine->swapchainImageFormat;
+        createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+        createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+        createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+        createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+        createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        createInfo.subresourceRange.baseMipLevel = 0;
+        createInfo.subresourceRange.levelCount = 1;
+        createInfo.subresourceRange.baseArrayLayer = 0;
+        createInfo.subresourceRange.layerCount = 1;
+        MEMRE_ASSERT(vkCreateImageView(f_engine->device, &createInfo, NULL, &f_engine->swapchainImageViews[i]) != VK_SUCCESS,
+                     "Failed to create image views");
+    }
+}
+
+void
+VK_initialize(VulkanEngine* f_engine, HWND* f_mainWindowHandle, uint32_t* f_mainWindowWidth, uint32_t* f_mainWindowHeight)
 {
     // Create an instance
 	f_engine->instance = 0;
+    
+    // Window Info
+    f_engine->window.handle = f_mainWindowHandle;
+    f_engine->window.width = f_mainWindowWidth;
+    f_engine->window.height = f_mainWindowHeight;
     
     // Surface extensions
 	f_engine->surfaceExtensions.extSurface = VK_KHR_SURFACE_EXTENSION_NAME;
@@ -562,9 +596,6 @@ VK_initialize(VulkanEngine* f_engine, HWND* f_mainWindowHandle)
     
     // Validation layer extensions
     f_engine->validationExtensions.extValidation = "VK_LAYER_KHRONOS_validation";
-    
-    // Take windows's handle address
-    f_engine->mainWindowHandle = f_mainWindowHandle;
     
     // Swapchain extension(s?)
     f_engine->swapchainExtensions.extSwapchain = VK_KHR_SWAPCHAIN_EXTENSION_NAME;
@@ -575,12 +606,17 @@ VK_initialize(VulkanEngine* f_engine, HWND* f_mainWindowHandle)
     VK_createSurface(f_engine);
     VK_pickPhysicalDevice(f_engine);
     VK_createLogicalDevice(f_engine);
-    VK_createSwapchain(f_engine, globalWidth, globalHeight);
+    VK_createSwapchain(f_engine);
+    VK_createImageViews(f_engine);
 }
 
 void
 VK_cleanup(VulkanEngine* f_engine)
 {
+    for(uint32_t i = 0; i < f_engine->swapchainImagesArraySize; i++)
+    {
+        vkDestroyImageView(f_engine->device, f_engine->swapchainImageViews[i], NULL);
+    }
     vkDestroySwapchainKHR(f_engine->device, f_engine->swapchain, NULL);
     vkDestroyDevice(f_engine->device, NULL);
     if(globalEnableValidationLayers)
