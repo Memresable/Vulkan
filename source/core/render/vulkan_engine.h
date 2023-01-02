@@ -209,8 +209,7 @@ VK_setupDebugMessenger(VulkanEngine* f_engine)
     VkDebugUtilsMessengerCreateInfoEXT createInfo = {0};
     VK_populateDebugMessengerCreateInfo(&createInfo);
     
-    MEMRE_ASSERT(VK_createDebugUtilsMessengerEXT(f_engine->instance, &createInfo, NULL, 
-                                                 &f_engine->debugMessenger) != VK_SUCCESS,
+    MEMRE_ASSERT(VK_createDebugUtilsMessengerEXT(f_engine->instance, &createInfo, NULL, &f_engine->debugMessenger) != VK_SUCCESS,
                  "Failed to setup a debug messenger\n");
 }
 
@@ -219,6 +218,8 @@ VK_createInstance(VulkanEngine* f_engine)
 {
     MEMRE_ASSERT(!VK_validationSupport(f_engine) && globalEnableValidationLayers,
                  "Validation Layers Requested, but not available\n");
+    
+    f_engine->instance = 0;
     
 	VkApplicationInfo appInfo = {0};
 	appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -582,9 +583,6 @@ VK_createImageViews(VulkanEngine* f_engine)
 void
 VK_initialize(VulkanEngine* f_engine, HWND* f_mainWindowHandle, uint32_t* f_mainWindowWidth, uint32_t* f_mainWindowHeight)
 {
-    // Create an instance
-	f_engine->instance = 0;
-    
     // Window Info
     f_engine->window.handle = f_mainWindowHandle;
     f_engine->window.width = f_mainWindowWidth;
