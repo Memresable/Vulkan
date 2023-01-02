@@ -8,6 +8,8 @@
 #define MEMRE_FALSE 0
 #define MEMRE_TRUE 1
 
+//#define UINT32_MAX ~0u
+
 #define ARRAY_SIZE(X) sizeof(X)/sizeof(X[0])
 #define STRING_STRUCT_SIZE(X) sizeof(X)/8
 

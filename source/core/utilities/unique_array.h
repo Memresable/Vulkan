@@ -21,7 +21,7 @@ typedef struct
     uint32_t number;
     int isDuplicated;
 } CachedUniqueNumber;
-void
+inline void
 checkForIntegerDuplicates(uint32_t* f_uniqueArray, int* f_isIndexDuplicated,
                           uint32_t* f_arrayLookup, uint32_t f_arraySize)
 {
@@ -62,7 +62,7 @@ checkForIntegerDuplicates(uint32_t* f_uniqueArray, int* f_isIndexDuplicated,
         }
     }
 }
-UniqueIntegerArray
+inline UniqueIntegerArray
 createUniqueIntegerArray(uint32_t* f_array, uint32_t f_arraySize)
 {
     UniqueIntegerArray temp = {0};
@@ -109,7 +109,7 @@ typedef struct
     string_t string;
     int isDuplicated;
 } CachedUniqueString;
-void
+inline void
 checkForStringDuplicates(string_t* f_uniqueArray, int* f_isIndexDuplicated,
                          string_t* f_arrayLookup, uint32_t f_arraySize)
 {
@@ -150,7 +150,7 @@ checkForStringDuplicates(string_t* f_uniqueArray, int* f_isIndexDuplicated,
         }
     }
 }
-UniqueStringArray
+inline UniqueStringArray
 createUniqueStringArray(string_t* f_array, uint32_t f_arraySize)
 {
     UniqueStringArray temp = {0};

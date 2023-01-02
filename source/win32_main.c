@@ -43,7 +43,7 @@ wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdS
     
 	HWND hwnd = CreateWindowEx(0,
                                className,
-                               L"fun_graphics",
+                               L"MemreVK1",
                                WS_OVERLAPPEDWINDOW,
                                CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
                                NULL,
