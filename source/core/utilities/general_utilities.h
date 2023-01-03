@@ -9,7 +9,6 @@
 #define MEMRE_TRUE 1
 
 #define ARRAY_SIZE(X) sizeof(X)/sizeof(X[0])
-#define STRING_STRUCT_SIZE(X) sizeof(X)/8
 
 #define MEMRE_ASSERT(X, err_string) \
 if(X) \

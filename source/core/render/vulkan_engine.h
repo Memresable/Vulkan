@@ -97,6 +97,8 @@ typedef struct
     VkImage* swapchainImages;
     uint32_t swapchainImagesArraySize;
     VkImageView* swapchainImageViews;
+    
+    VkPipelineLayout pipelineLayout;
 } VulkanEngine;
 
 // TODO: make this better
@@ -453,13 +455,13 @@ VK_createLogicalDevice(VulkanEngine* f_engine)
 {
     QueueFamilyIndices indices = VK_findQueueFamilies(f_engine->physicalDevice, f_engine->surface);
     
-    uint32_t* copiedIndicesArray = (uint32_t*)malloc(sizeof(uint32_t) * ARRAY_SIZE(indices.array));
+    uint32_t* copiedIndicesArray = (uint32_t*)malloc(sizeof(uint32_t) * (ARRAY_SIZE(indices.array)));
     for(uint32_t i = 0; i < ARRAY_SIZE(indices.array); i++) copiedIndicesArray[i] = *indices.array[i];
     
     UniqueIntegerArray uniqueIndices = createUniqueIntegerArray(copiedIndicesArray, ARRAY_SIZE(indices.array));
     
     VkDeviceQueueCreateInfo* queueCreateInfos =
-    (VkDeviceQueueCreateInfo*)malloc(sizeof(VkDeviceQueueCreateInfo) * ARRAY_SIZE(indices.array));
+    (VkDeviceQueueCreateInfo*)malloc(sizeof(VkDeviceQueueCreateInfo) * (ARRAY_SIZE(indices.array)));
     
     float queuePriority = 1.f;
     for(uint32_t i = 0; i < uniqueIndices.size; i++)
@@ -580,17 +582,183 @@ VK_createImageViews(VulkanEngine* f_engine)
     }
 }
 
+typedef struct
+{
+    char* binaryData;
+    uint32_t binarySize;
+} VulkanShaderBinaryData;
+
+VulkanShaderBinaryData*
+VK_readShaderFile(LPCWSTR f_binaryShaderFile)
+{
+    HANDLE hFile;
+    hFile = CreateFile((LPCWSTR)f_binaryShaderFile,
+                       GENERIC_READ,
+                       FILE_SHARE_READ,
+                       NULL,
+                       OPEN_EXISTING,
+                       FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED,
+                       NULL);
+    if(hFile == INVALID_HANDLE_VALUE) 
+    { 
+        OutputDebugStringA("Unable to open the file");
+        return(NULL);
+    }
+    
+    int64_t binarySize = 0;
+    GetFileSizeEx(hFile, (PLARGE_INTEGER)&binarySize);
+    char* readBuffer = (char*)malloc(sizeof(char)*binarySize);
+    OVERLAPPED ol = {0};
+    if(ReadFileEx(hFile, readBuffer, binarySize, &ol, NULL) == FALSE)
+    {
+        OutputDebugStringA("Reading the binary shader file was interrupted");
+        CloseHandle(hFile);
+        return(NULL);
+    }
+    
+    CloseHandle(hFile);
+    
+    VulkanShaderBinaryData* result = (VulkanShaderBinaryData*)malloc(sizeof(VulkanShaderBinaryData));
+    result->binaryData = readBuffer;
+    result->binarySize = binarySize;
+    return(result);
+}
+
+VkShaderModule
+VK_createShaderModule(VulkanEngine* f_engine, VulkanShaderBinaryData* f_shaderBinary)
+{
+    VkShaderModuleCreateInfo createInfo = {0};
+    createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    createInfo.codeSize = f_shaderBinary->binarySize;
+    createInfo.pCode = (const uint32_t*)f_shaderBinary->binaryData;
+    
+    VkShaderModule shaderModule;
+    MEMRE_ASSERT(vkCreateShaderModule(f_engine->device, &createInfo, NULL, &shaderModule) != VK_SUCCESS, "Failed to create a shader module");
+    return(shaderModule);
+}
+
+void
+VK_createGraphicsPipeline(VulkanEngine* f_engine)
+{
+    VulkanShaderBinaryData* vertexData =
+        VK_readShaderFile(L"C:\\Users\\Memresable\\Desktop\\MemreVK1\\source\\core\\render\\shaders\\vertex.spv");
+    VulkanShaderBinaryData* fragmentData =
+        VK_readShaderFile(L"C:\\Users\\Memresable\\Desktop\\MemreVK1\\source\\core\\render\\shaders\\fragment.spv");
+    MEMRE_ASSERT((!vertexData->binaryData) || (!fragmentData->binaryData), "Unable to read the binary shader files");
+    
+    VkShaderModule vertexShaderModule = VK_createShaderModule(f_engine, vertexData);
+    VkShaderModule fragmentShaderModule = VK_createShaderModule(f_engine, fragmentData);
+    
+    VkPipelineShaderStageCreateInfo vertexShaderStageInfo = {0};
+    vertexShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    vertexShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+    vertexShaderStageInfo.module = vertexShaderModule;
+    vertexShaderStageInfo.pName = "main";
+    
+    VkPipelineShaderStageCreateInfo fragmentShaderStageInfo = {0};
+    fragmentShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    fragmentShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    fragmentShaderStageInfo.module = fragmentShaderModule;
+    fragmentShaderStageInfo.pName = "main";
+    
+    VkPipelineShaderStageCreateInfo shaderStages[2] = {vertexShaderStageInfo, fragmentShaderStageInfo};
+    
+    VkPipelineVertexInputStateCreateInfo vertexInputInfo = {0};
+    vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    
+    uint32_t dynamicStatesSize = 2;
+    VkDynamicState* dynamicStates = (VkDynamicState*)malloc(sizeof(VkDynamicState)*dynamicStatesSize);
+    dynamicStates[0] = VK_DYNAMIC_STATE_VIEWPORT;
+    dynamicStates[1] = VK_DYNAMIC_STATE_SCISSOR;
+    
+    VkPipelineDynamicStateCreateInfo dynamicState = {0};
+    dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    dynamicState.dynamicStateCount = (uint32_t)dynamicStatesSize;
+    dynamicState.pDynamicStates = &dynamicStates[0];
+    
+    VkPipelineInputAssemblyStateCreateInfo inputAssembly = {0};
+    inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    inputAssembly.primitiveRestartEnable = VK_FALSE;
+    
+    VkViewport viewport = {0};
+    viewport.x = 0.0f;
+    viewport.y = 0.0f;
+    viewport.width = (float32_t)f_engine->swapchainExtent.width;
+    viewport.height = (float32_t)f_engine->swapchainExtent.height;
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+    
+    VkRect2D scissor = {0};
+    scissor.offset.x = 0;
+    scissor.offset.y = 0;
+    scissor.extent = f_engine->swapchainExtent;
+    
+    VkPipelineViewportStateCreateInfo viewportState = {0};
+    viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    viewportState.viewportCount = 1;
+    viewportState.pViewports = &viewport;
+    viewportState.scissorCount = 1;
+    viewportState.pScissors = &scissor;
+    
+    VkPipelineRasterizationStateCreateInfo rasterizer = {0};
+    rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+    rasterizer.depthClampEnable = VK_FALSE;
+    rasterizer.rasterizerDiscardEnable = VK_FALSE;
+    rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+    rasterizer.lineWidth = 1.0f;
+    rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+    rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
+    rasterizer.depthBiasEnable = VK_FALSE;
+    
+    VkPipelineMultisampleStateCreateInfo multisampling = {0};
+    multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+    multisampling.sampleShadingEnable = VK_FALSE;
+    multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+    
+    VkPipelineColorBlendAttachmentState colorBlendAttachment = {0};
+    colorBlendAttachment.colorWriteMask =
+        VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    colorBlendAttachment.blendEnable = VK_TRUE;
+    colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+    colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
+    colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+    colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
+    
+    VkPipelineColorBlendStateCreateInfo colorBlending = {0};
+    colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    colorBlending.logicOpEnable = VK_FALSE;
+    colorBlending.logicOp = VK_LOGIC_OP_COPY;
+    colorBlending.attachmentCount = 1;
+    colorBlending.pAttachments = &colorBlendAttachment;
+    colorBlending.blendConstants[0] = 0.0f;
+    colorBlending.blendConstants[1] = 0.0f;
+    colorBlending.blendConstants[2] = 0.0f;
+    colorBlending.blendConstants[3] = 0.0f;
+    
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo = {0};
+    pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    
+    MEMRE_ASSERT(vkCreatePipelineLayout(f_engine->device, &pipelineLayoutInfo, NULL, &f_engine->pipelineLayout) != VK_SUCCESS,
+                 "failed to create pipeline layout!");
+    
+    vkDestroyShaderModule(f_engine->device, vertexShaderModule, NULL);
+    vkDestroyShaderModule(f_engine->device, fragmentShaderModule, NULL);
+}
+
 void
 VK_initialize(VulkanEngine* f_engine, HWND* f_mainWindowHandle, uint32_t* f_mainWindowWidth, uint32_t* f_mainWindowHeight)
 {
-    // Window Info
+    // Window info
     f_engine->window.handle = f_mainWindowHandle;
     f_engine->window.width = f_mainWindowWidth;
     f_engine->window.height = f_mainWindowHeight;
     
     // Surface extensions
-	f_engine->surfaceExtensions.extSurface = VK_KHR_SURFACE_EXTENSION_NAME;
-	f_engine->surfaceExtensions.extWin32Surface = VK_KHR_WIN32_SURFACE_EXTENSION_NAME;
+    f_engine->surfaceExtensions.extSurface = VK_KHR_SURFACE_EXTENSION_NAME;
+    f_engine->surfaceExtensions.extWin32Surface = VK_KHR_WIN32_SURFACE_EXTENSION_NAME;
     
     // Validation layer extensions
     f_engine->validationExtensions.extValidation = "VK_LAYER_KHRONOS_validation";
@@ -606,11 +774,12 @@ VK_initialize(VulkanEngine* f_engine, HWND* f_mainWindowHandle, uint32_t* f_main
     VK_createLogicalDevice(f_engine);
     VK_createSwapchain(f_engine);
     VK_createImageViews(f_engine);
+    VK_createGraphicsPipeline(f_engine);
 }
-
 void
 VK_cleanup(VulkanEngine* f_engine)
 {
+    vkDestroyPipelineLayout(f_engine->device, f_engine->pipelineLayout, NULL);
     for(uint32_t i = 0; i < f_engine->swapchainImagesArraySize; i++)
     {
         vkDestroyImageView(f_engine->device, f_engine->swapchainImageViews[i], NULL);
