@@ -98,7 +98,9 @@ typedef struct
     uint32_t swapchainImagesArraySize;
     VkImageView* swapchainImageViews;
     
+    VkRenderPass renderPass;
     VkPipelineLayout pipelineLayout;
+    VkPipeline graphicsPipeline;
 } VulkanEngine;
 
 // TODO: make this better
@@ -300,7 +302,6 @@ VK_findQueueFamilies(VkPhysicalDevice f_device, VkSurfaceKHR f_surface)
             }
         }
     }
-    
     return(result);
 }
 
@@ -582,12 +583,46 @@ VK_createImageViews(VulkanEngine* f_engine)
     }
 }
 
+void
+VK_createRenderpass(VulkanEngine* f_engine)
+{
+    VkAttachmentDescription colorAttachment = {0};
+    colorAttachment.format = f_engine->swapchainImageFormat;
+    colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    
+    VkAttachmentReference colorAttachmentRef = {0};
+    colorAttachmentRef.attachment = 0;
+    colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    
+    VkSubpassDescription subpass = {0};
+    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpass.colorAttachmentCount = 1;
+    subpass.pColorAttachments = &colorAttachmentRef;
+    
+    VkRenderPassCreateInfo renderPassInfo = {0};
+    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    renderPassInfo.attachmentCount = 1;
+    renderPassInfo.pAttachments = &colorAttachment;
+    renderPassInfo.subpassCount = 1;
+    renderPassInfo.pSubpasses = &subpass;
+    
+    MEMRE_ASSERT(vkCreateRenderPass(f_engine->device, &renderPassInfo, NULL, &f_engine->renderPass) != VK_SUCCESS,
+                 "failed to create render pass!");
+}
+
 typedef struct
 {
     char* binaryData;
     uint32_t binarySize;
 } VulkanShaderBinaryData;
 
+// TODO: move the reading functionality to platform specific header file
 VulkanShaderBinaryData*
 VK_readShaderFile(LPCWSTR f_binaryShaderFile)
 {
@@ -667,7 +702,7 @@ VK_createGraphicsPipeline(VulkanEngine* f_engine)
     vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
     
     uint32_t dynamicStatesSize = 2;
-    VkDynamicState* dynamicStates = (VkDynamicState*)malloc(sizeof(VkDynamicState)*dynamicStatesSize);
+    VkDynamicState dynamicStates[2];
     dynamicStates[0] = VK_DYNAMIC_STATE_VIEWPORT;
     dynamicStates[1] = VK_DYNAMIC_STATE_SCISSOR;
     
@@ -744,6 +779,26 @@ VK_createGraphicsPipeline(VulkanEngine* f_engine)
     MEMRE_ASSERT(vkCreatePipelineLayout(f_engine->device, &pipelineLayoutInfo, NULL, &f_engine->pipelineLayout) != VK_SUCCESS,
                  "failed to create pipeline layout!");
     
+    VkGraphicsPipelineCreateInfo pipelineInfo = {0};
+    pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    pipelineInfo.stageCount = 2;
+    pipelineInfo.pStages = &shaderStages[0];
+    pipelineInfo.pVertexInputState = &vertexInputInfo;
+    pipelineInfo.pInputAssemblyState = &inputAssembly;
+    pipelineInfo.pViewportState = &viewportState;
+    pipelineInfo.pRasterizationState = &rasterizer;
+    pipelineInfo.pMultisampleState = &multisampling;
+    pipelineInfo.pColorBlendState = &colorBlending;
+    pipelineInfo.pDynamicState = &dynamicState;
+    pipelineInfo.layout = f_engine->pipelineLayout;
+    pipelineInfo.renderPass = f_engine->renderPass;
+    pipelineInfo.subpass = 0;
+    pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
+    pipelineInfo.basePipelineIndex = -1;
+    
+    MEMRE_ASSERT(vkCreateGraphicsPipelines(f_engine->device, VK_NULL_HANDLE, 1, &pipelineInfo, NULL, &f_engine->graphicsPipeline) != VK_SUCCESS,
+                 "failed to create graphics pipeline!");
+    
     vkDestroyShaderModule(f_engine->device, vertexShaderModule, NULL);
     vkDestroyShaderModule(f_engine->device, fragmentShaderModule, NULL);
 }
@@ -774,12 +829,15 @@ VK_initialize(VulkanEngine* f_engine, HWND* f_mainWindowHandle, uint32_t* f_main
     VK_createLogicalDevice(f_engine);
     VK_createSwapchain(f_engine);
     VK_createImageViews(f_engine);
+    VK_createRenderpass(f_engine);
     VK_createGraphicsPipeline(f_engine);
 }
 void
 VK_cleanup(VulkanEngine* f_engine)
 {
+    vkDestroyPipeline(f_engine->device, f_engine->graphicsPipeline, NULL);
     vkDestroyPipelineLayout(f_engine->device, f_engine->pipelineLayout, NULL);
+    vkDestroyRenderPass(f_engine->device, f_engine->renderPass, NULL);
     for(uint32_t i = 0; i < f_engine->swapchainImagesArraySize; i++)
     {
         vkDestroyImageView(f_engine->device, f_engine->swapchainImageViews[i], NULL);
