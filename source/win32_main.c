@@ -37,15 +37,16 @@ WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 void mainLoop(VulkanEngine* f_engine)
 {
-    // this look wrong to me, will have to fix it
     MSG msg = {0};
-    while(GetMessage(&msg, NULL, 0, 0) > 0 && appIsRunning)
-	{
-		TranslateMessage(&msg);
-		DispatchMessage(&msg);
+    while(appIsRunning)
+    {
+        while(PeekMessage(&msg, NULL, 0U, 0U, PM_REMOVE))
+        {
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+        }
         VK_drawFrame(f_engine);
-	}
-    
+    }
     vkDeviceWaitIdle(f_engine->device);
 }
 

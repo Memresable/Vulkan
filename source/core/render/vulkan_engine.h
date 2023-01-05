@@ -206,10 +206,11 @@ VK_populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT* createIn
     *createInfo = (VkDebugUtilsMessengerCreateInfoEXT){0};
     createInfo->sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
     createInfo->messageSeverity =
-        VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | 
+        VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
         VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
     createInfo->messageType = 
-        VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | 
+        VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+        VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
         VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
     createInfo->pfnUserCallback = VK_debugCallback;
 }
@@ -689,7 +690,8 @@ VK_createShaderModule(VulkanEngine* f_engine, VulkanShaderBinaryData* f_shaderBi
     createInfo.pCode = (const uint32_t*)f_shaderBinary->binaryData;
     
     VkShaderModule shaderModule;
-    MEMRE_ASSERT(vkCreateShaderModule(f_engine->device, &createInfo, NULL, &shaderModule) != VK_SUCCESS, "Failed to create a shader module");
+    MEMRE_ASSERT(vkCreateShaderModule(f_engine->device, &createInfo, NULL, &shaderModule) != VK_SUCCESS,
+                 "Failed to create a shader module");
     return(shaderModule);
 }
 
