@@ -1,6 +1,6 @@
 #pragma once
 
-// TODO: replace malloc with VirtualAlloc & remove any non-platform library
+// TODO: replace malloc with VirtualAlloc/HeapAlloc & remove any non-platform library
 #include <stdlib.h>
 
 #include "../utilities/general_utilities.h"
@@ -101,6 +101,15 @@ typedef struct
     VkRenderPass renderPass;
     VkPipelineLayout pipelineLayout;
     VkPipeline graphicsPipeline;
+    
+    VkFramebuffer* swapchainFramebuffers;
+    
+    VkCommandPool commandPool;
+    VkCommandBuffer commandBuffer;
+    
+    VkSemaphore imageAvailableSemaphore;
+    VkSemaphore renderFinishedSemaphore;
+    VkFence inFlightFence;
 } VulkanEngine;
 
 // TODO: make this better
@@ -464,7 +473,7 @@ VK_createLogicalDevice(VulkanEngine* f_engine)
     VkDeviceQueueCreateInfo* queueCreateInfos =
     (VkDeviceQueueCreateInfo*)malloc(sizeof(VkDeviceQueueCreateInfo) * (ARRAY_SIZE(indices.array)));
     
-    float queuePriority = 1.f;
+    float32_t queuePriority = 1.f;
     for(uint32_t i = 0; i < uniqueIndices.size; i++)
     {
         VkDeviceQueueCreateInfo queueCreateInfo = {0};
@@ -513,6 +522,7 @@ VK_createSwapchain(VulkanEngine* f_engine)
     {
         imageCount = swapchainSupport.capabilities.maxImageCount;
     }
+    f_engine->swapchainImagesArraySize = imageCount;
     
     VkSwapchainCreateInfoKHR createInfo = {0};
     createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
@@ -584,7 +594,7 @@ VK_createImageViews(VulkanEngine* f_engine)
 }
 
 void
-VK_createRenderpass(VulkanEngine* f_engine)
+VK_createRenderPass(VulkanEngine* f_engine)
 {
     VkAttachmentDescription colorAttachment = {0};
     colorAttachment.format = f_engine->swapchainImageFormat;
@@ -605,6 +615,14 @@ VK_createRenderpass(VulkanEngine* f_engine)
     subpass.colorAttachmentCount = 1;
     subpass.pColorAttachments = &colorAttachmentRef;
     
+    VkSubpassDependency dependency = {0};
+    dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+    dependency.dstSubpass = 0;
+    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependency.srcAccessMask = 0;
+    dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    
     VkRenderPassCreateInfo renderPassInfo = {0};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
     renderPassInfo.attachmentCount = 1;
@@ -612,8 +630,11 @@ VK_createRenderpass(VulkanEngine* f_engine)
     renderPassInfo.subpassCount = 1;
     renderPassInfo.pSubpasses = &subpass;
     
+    renderPassInfo.dependencyCount = 1;
+    renderPassInfo.pDependencies = &dependency;
+    
     MEMRE_ASSERT(vkCreateRenderPass(f_engine->device, &renderPassInfo, NULL, &f_engine->renderPass) != VK_SUCCESS,
-                 "failed to create render pass!");
+                 "Failed to create render pass!");
 }
 
 typedef struct
@@ -777,7 +798,7 @@ VK_createGraphicsPipeline(VulkanEngine* f_engine)
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     
     MEMRE_ASSERT(vkCreatePipelineLayout(f_engine->device, &pipelineLayoutInfo, NULL, &f_engine->pipelineLayout) != VK_SUCCESS,
-                 "failed to create pipeline layout!");
+                 "Failed to create pipeline layout!");
     
     VkGraphicsPipelineCreateInfo pipelineInfo = {0};
     pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -797,10 +818,164 @@ VK_createGraphicsPipeline(VulkanEngine* f_engine)
     pipelineInfo.basePipelineIndex = -1;
     
     MEMRE_ASSERT(vkCreateGraphicsPipelines(f_engine->device, VK_NULL_HANDLE, 1, &pipelineInfo, NULL, &f_engine->graphicsPipeline) != VK_SUCCESS,
-                 "failed to create graphics pipeline!");
+                 "Failed to create graphics pipeline!");
     
     vkDestroyShaderModule(f_engine->device, vertexShaderModule, NULL);
     vkDestroyShaderModule(f_engine->device, fragmentShaderModule, NULL);
+}
+
+void
+VK_createFramebuffer(VulkanEngine* f_engine)
+{
+    uint32_t swapchainImagesSize = f_engine->swapchainImagesArraySize;
+    f_engine->swapchainFramebuffers = (VkFramebuffer*)malloc(sizeof(VkFramebuffer)*swapchainImagesSize);
+    for(uint32_t i = 0; i < swapchainImagesSize; i++)
+    {
+        VkImageView attachments[1] = {f_engine->swapchainImageViews[i]};
+        
+        VkFramebufferCreateInfo framebufferInfo = {0};
+        framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        framebufferInfo.renderPass = f_engine->renderPass;
+        framebufferInfo.attachmentCount = 1;
+        framebufferInfo.pAttachments = attachments;
+        framebufferInfo.width = f_engine->swapchainExtent.width;
+        framebufferInfo.height = f_engine->swapchainExtent.height;
+        framebufferInfo.layers = 1;
+        
+        MEMRE_ASSERT(vkCreateFramebuffer(f_engine->device, &framebufferInfo, NULL, &f_engine->swapchainFramebuffers[i]) != VK_SUCCESS,
+                     "Failed to create framebuffers!");
+    }
+}
+
+void
+VK_createCommandPool(VulkanEngine* f_engine)
+{
+    QueueFamilyIndices queueFamilyIndices = VK_findQueueFamilies(f_engine->physicalDevice, f_engine->surface);
+    
+    VkCommandPoolCreateInfo poolInfo = {0};
+    poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    poolInfo.queueFamilyIndex = *queueFamilyIndices.graphicsFamily;
+    
+    MEMRE_ASSERT(vkCreateCommandPool(f_engine->device, &poolInfo, NULL, &f_engine->commandPool) != VK_SUCCESS,
+                 "Failed to create command pool!");
+}
+
+void
+recordCommandBuffer(VulkanEngine* f_engine, VkCommandBuffer commandBuffer, uint32_t imageIndex)
+{
+    VkCommandBufferBeginInfo beginInfo = {0};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    
+    MEMRE_ASSERT(vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS,
+                 "Failed to begin recording command buffer!");
+    
+    VkRenderPassBeginInfo renderPassInfo = {0};
+    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    renderPassInfo.renderPass = f_engine->renderPass;
+    renderPassInfo.framebuffer = f_engine->swapchainFramebuffers[imageIndex];
+    renderPassInfo.renderArea.offset.x = 0;
+    renderPassInfo.renderArea.offset.y = 0;
+    renderPassInfo.renderArea.extent = f_engine->swapchainExtent;
+    VkClearValue clearColor = {{{0.0f, 0.0f, 0.0f, 1.0f}}}; // BACKGROUND COLOR
+    renderPassInfo.clearValueCount = 1;
+    renderPassInfo.pClearValues = &clearColor;
+    
+    vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+    
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, f_engine->graphicsPipeline);
+    
+    VkViewport viewport = {0};
+    viewport.x = 0.0f;
+    viewport.y = 0.0f;
+    viewport.width = (float32_t)f_engine->swapchainExtent.width;
+    viewport.height = (float32_t)f_engine->swapchainExtent.height;
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+    
+    VkRect2D scissor = {0};
+    scissor.offset.x = 0;
+    scissor.offset.y = 0;
+    scissor.extent = f_engine->swapchainExtent;
+    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+    
+    vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+    
+    vkCmdEndRenderPass(commandBuffer);
+    
+    MEMRE_ASSERT(vkEndCommandBuffer(commandBuffer) != VK_SUCCESS, "Failed to record command buffer!");
+}
+
+void
+VK_createCommandBuffer(VulkanEngine* f_engine)
+{
+    VkCommandBufferAllocateInfo allocInfo = {0};
+    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocInfo.commandPool = f_engine->commandPool;
+    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocInfo.commandBufferCount = 1;
+    
+    MEMRE_ASSERT(vkAllocateCommandBuffers(f_engine->device, &allocInfo, &f_engine->commandBuffer) != VK_SUCCESS,
+                 "Failed to allocate command buffers!");
+}
+
+void
+VK_createSyncObjects(VulkanEngine* f_engine)
+{
+    VkSemaphoreCreateInfo semaphoreInfo = {0};
+    semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+    
+    VkFenceCreateInfo fenceInfo = {0};
+    fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+    
+    MEMRE_ASSERT(vkCreateSemaphore(f_engine->device, &semaphoreInfo, NULL, &f_engine->imageAvailableSemaphore) != VK_SUCCESS ||
+                 vkCreateSemaphore(f_engine->device, &semaphoreInfo, NULL, &f_engine->renderFinishedSemaphore) != VK_SUCCESS ||
+                 vkCreateFence(f_engine->device, &fenceInfo, NULL, &f_engine->inFlightFence) != VK_SUCCESS,
+                 "Failed to create semaphores!");
+}
+
+void
+VK_drawFrame(VulkanEngine* f_engine)
+{
+    vkWaitForFences(f_engine->device, 1, &f_engine->inFlightFence, VK_TRUE, UINT64_MAX);
+    vkResetFences(f_engine->device, 1, &f_engine->inFlightFence);
+    
+    uint32_t imageIndex;
+    vkAcquireNextImageKHR(f_engine->device, f_engine->swapchain, UINT64_MAX, f_engine->imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
+    
+    vkResetCommandBuffer(f_engine->commandBuffer, 0);
+    recordCommandBuffer(f_engine, f_engine->commandBuffer, imageIndex);
+    
+    VkSubmitInfo submitInfo = {0};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    
+    VkSemaphore waitSemaphores[1] = {f_engine->imageAvailableSemaphore};
+    VkPipelineStageFlags waitStages[1] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+    submitInfo.waitSemaphoreCount = 1;
+    submitInfo.pWaitSemaphores = waitSemaphores;
+    submitInfo.pWaitDstStageMask = waitStages;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &f_engine->commandBuffer;
+    VkSemaphore signalSemaphores[1] = {f_engine->renderFinishedSemaphore};
+    submitInfo.signalSemaphoreCount = 1;
+    submitInfo.pSignalSemaphores = signalSemaphores;
+    
+    MEMRE_ASSERT(vkQueueSubmit(f_engine->graphicsQueue, 1, &submitInfo, f_engine->inFlightFence) != VK_SUCCESS,
+                 "Failed to submit draw command buffer!");
+    
+    VkPresentInfoKHR presentInfo = {0};
+    presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    presentInfo.waitSemaphoreCount = 1;
+    presentInfo.pWaitSemaphores = signalSemaphores;
+    
+    VkSwapchainKHR swapchains[1] = {f_engine->swapchain};
+    presentInfo.swapchainCount = 1;
+    presentInfo.pSwapchains = swapchains;
+    presentInfo.pImageIndices = &imageIndex;
+    
+    vkQueuePresentKHR(f_engine->presentQueue, &presentInfo);
 }
 
 void
@@ -829,12 +1004,24 @@ VK_initialize(VulkanEngine* f_engine, HWND* f_mainWindowHandle, uint32_t* f_main
     VK_createLogicalDevice(f_engine);
     VK_createSwapchain(f_engine);
     VK_createImageViews(f_engine);
-    VK_createRenderpass(f_engine);
+    VK_createRenderPass(f_engine);
     VK_createGraphicsPipeline(f_engine);
+    VK_createFramebuffer(f_engine);
+    VK_createCommandPool(f_engine);
+    VK_createCommandBuffer(f_engine);
+    VK_createSyncObjects(f_engine);
 }
 void
 VK_cleanup(VulkanEngine* f_engine)
 {
+    vkDestroySemaphore(f_engine->device, f_engine->imageAvailableSemaphore, NULL);
+    vkDestroySemaphore(f_engine->device, f_engine->renderFinishedSemaphore, NULL);
+    vkDestroyFence(f_engine->device, f_engine->inFlightFence, NULL);
+    vkDestroyCommandPool(f_engine->device, f_engine->commandPool, NULL);
+    for(uint32_t i = 0; i < f_engine->swapchainImagesArraySize; i++)
+    {
+        vkDestroyFramebuffer(f_engine->device, f_engine->swapchainFramebuffers[i], NULL);
+    }
     vkDestroyPipeline(f_engine->device, f_engine->graphicsPipeline, NULL);
     vkDestroyPipelineLayout(f_engine->device, f_engine->pipelineLayout, NULL);
     vkDestroyRenderPass(f_engine->device, f_engine->renderPass, NULL);
