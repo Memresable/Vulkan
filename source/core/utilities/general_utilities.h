@@ -1,8 +1,6 @@
 #ifndef G_UTILITIY_H
 #define G_UTILITIY_H
 
-#include <windows.h>
-
 #include "../utilities/types.h"
 
 #define MEMRE_FALSE 0

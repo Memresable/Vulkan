@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VULKAN_ENGINE_H
+#define VULKAN_ENGINE_H
 
 // TODO: replace malloc with VirtualAlloc/HeapAlloc & remove any non-platform library
 #include <stdlib.h>
@@ -12,7 +13,11 @@
 #define APPLICATION_NAME "MemreVK1"
 #define ENGINE_NAME "MemrEngine"
 
+#define MAX_FRAMES_IN_FLIGHT 2
+
 const int globalEnableValidationLayers = MEMRE_TRUE;
+
+uint32_t currentFrame = 0;
 
 typedef struct
 {
@@ -97,19 +102,18 @@ typedef struct
     VkImage* swapchainImages;
     uint32_t swapchainImagesArraySize;
     VkImageView* swapchainImageViews;
+    VkFramebuffer* swapchainFramebuffers;
     
     VkRenderPass renderPass;
     VkPipelineLayout pipelineLayout;
     VkPipeline graphicsPipeline;
     
-    VkFramebuffer* swapchainFramebuffers;
-    
     VkCommandPool commandPool;
-    VkCommandBuffer commandBuffer;
-    
-    VkSemaphore imageAvailableSemaphore;
-    VkSemaphore renderFinishedSemaphore;
-    VkFence inFlightFence;
+    VkCommandBuffer* commandBuffers;
+    uint32_t sizeOfCommandBuffers;
+    VkSemaphore* imageAvailableSemaphores;
+    VkSemaphore* renderFinishedSemaphores;
+    VkFence* inFlightFences;
 } VulkanEngine;
 
 // TODO: make this better
@@ -168,9 +172,9 @@ VK_debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
                  const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
                  void* pUserData)
 {
-    char buffer[8192]; // i wonder what's the biggest message vulkan could output?
-    sprintf(buffer, "[Validation layer]: %s\n", pCallbackData->pMessage);
-    OutputDebugStringA(buffer);
+    OutputDebugStringA("[Validation layer] ");
+    OutputDebugStringA(pCallbackData->pMessage);
+    OutputDebugStringA("\n");
     return(VK_FALSE);
 }
 
@@ -413,7 +417,7 @@ VK_chooseSwapSurfaceFormat(VkSurfaceFormatKHR* f_availableFormats, uint32_t f_fo
 VkExtent2D
 VK_chooseSwapExtent(VkSurfaceCapabilitiesKHR* f_capabilities, uint32_t f_windowWidth, uint32_t f_windowHeight)
 {
-    if(f_capabilities->currentExtent.width != UINT32_MAX)
+    if((f_capabilities->currentExtent.width != UINT32_MAX) || (f_capabilities->currentExtent.height != UINT32_MAX))
     {
         return(f_capabilities->currentExtent);
     }
@@ -827,7 +831,7 @@ VK_createGraphicsPipeline(VulkanEngine* f_engine)
 }
 
 void
-VK_createFramebuffer(VulkanEngine* f_engine)
+VK_createFramebuffers(VulkanEngine* f_engine)
 {
     uint32_t swapchainImagesSize = f_engine->swapchainImagesArraySize;
     f_engine->swapchainFramebuffers = (VkFramebuffer*)malloc(sizeof(VkFramebuffer)*swapchainImagesSize);
@@ -847,6 +851,54 @@ VK_createFramebuffer(VulkanEngine* f_engine)
         MEMRE_ASSERT(vkCreateFramebuffer(f_engine->device, &framebufferInfo, NULL, &f_engine->swapchainFramebuffers[i]) != VK_SUCCESS,
                      "Failed to create framebuffers!");
     }
+}
+
+void
+VK_cleanupSwapChain(VulkanEngine* f_engine)
+{
+    for(uint32_t i = 0; i < f_engine->swapchainImagesArraySize; i++)
+    {
+        vkDestroyFramebuffer(f_engine->device, f_engine->swapchainFramebuffers[i], NULL);
+        vkDestroyImageView(f_engine->device, f_engine->swapchainImageViews[i], NULL);
+    }
+    vkDestroySwapchainKHR(f_engine->device, f_engine->swapchain, NULL);
+}
+
+/*
+* TODO: Think about this approach from Vulkan Tutorial:
+* "That's all it takes to recreate the swap chain! However, the disadvantage of this approach is that we need to
+* stop all rendering *  before creating the new swap chain. It is possible to create a new swap chain while
+* drawing commands on an image from the old *swap chain are still in-flight.
+* You need to pass the previous swap chain to the oldSwapChain field in the
+* VkSwapchainCreateInfoKHR *struct and destroy the old swap chain as soon as you've finished using it. "
+*/
+void
+VK_recreateSwapchain(VulkanEngine* f_engine)
+{
+    // just trying to get the functionality working for now
+    // will cleanup later and try the quote above
+    MSG msg = {0};
+    VkSurfaceCapabilitiesKHR capabilities = {0};
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(f_engine->physicalDevice, f_engine->surface, &capabilities);
+    while((capabilities.currentExtent.width == 0) || (capabilities.currentExtent.height == 0))
+    {
+        vkGetPhysicalDeviceSurfaceCapabilitiesKHR(f_engine->physicalDevice, f_engine->surface, &capabilities);
+        *f_engine->window.width = capabilities.currentExtent.width;
+        *f_engine->window.height = capabilities.currentExtent.height;
+        while(PeekMessage(&msg, NULL, 0U, 0U, PM_REMOVE))
+        {
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+        }
+    }
+    *f_engine->window.width = capabilities.currentExtent.width;
+    *f_engine->window.height = capabilities.currentExtent.height;
+    
+    vkDeviceWaitIdle(f_engine->device);
+    
+    VK_createSwapchain(f_engine);
+    VK_createImageViews(f_engine);
+    VK_createFramebuffers(f_engine);
 }
 
 void
@@ -910,21 +962,28 @@ recordCommandBuffer(VulkanEngine* f_engine, VkCommandBuffer commandBuffer, uint3
 }
 
 void
-VK_createCommandBuffer(VulkanEngine* f_engine)
+VK_createCommandBuffers(VulkanEngine* f_engine)
 {
+    f_engine->sizeOfCommandBuffers = MAX_FRAMES_IN_FLIGHT;
+    f_engine->commandBuffers = (VkCommandBuffer*)malloc(sizeof(VkCommandBuffer)*MAX_FRAMES_IN_FLIGHT);
+    
     VkCommandBufferAllocateInfo allocInfo = {0};
     allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     allocInfo.commandPool = f_engine->commandPool;
     allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    allocInfo.commandBufferCount = 1;
+    allocInfo.commandBufferCount = f_engine->sizeOfCommandBuffers;
     
-    MEMRE_ASSERT(vkAllocateCommandBuffers(f_engine->device, &allocInfo, &f_engine->commandBuffer) != VK_SUCCESS,
+    MEMRE_ASSERT(vkAllocateCommandBuffers(f_engine->device, &allocInfo, &f_engine->commandBuffers[0]) != VK_SUCCESS,
                  "Failed to allocate command buffers!");
 }
 
 void
 VK_createSyncObjects(VulkanEngine* f_engine)
 {
+    f_engine->imageAvailableSemaphores = (VkSemaphore*)malloc(sizeof(VkSemaphore)*MAX_FRAMES_IN_FLIGHT);
+    f_engine->renderFinishedSemaphores = (VkSemaphore*)malloc(sizeof(VkSemaphore)*MAX_FRAMES_IN_FLIGHT);
+    f_engine->inFlightFences = (VkFence*)malloc(sizeof(VkFence)*MAX_FRAMES_IN_FLIGHT);
+    
     VkSemaphoreCreateInfo semaphoreInfo = {0};
     semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
     
@@ -932,39 +991,51 @@ VK_createSyncObjects(VulkanEngine* f_engine)
     fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
     fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
     
-    MEMRE_ASSERT(vkCreateSemaphore(f_engine->device, &semaphoreInfo, NULL, &f_engine->imageAvailableSemaphore) != VK_SUCCESS ||
-                 vkCreateSemaphore(f_engine->device, &semaphoreInfo, NULL, &f_engine->renderFinishedSemaphore) != VK_SUCCESS ||
-                 vkCreateFence(f_engine->device, &fenceInfo, NULL, &f_engine->inFlightFence) != VK_SUCCESS,
-                 "Failed to create semaphores!");
+    for(uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        MEMRE_ASSERT(vkCreateSemaphore(f_engine->device, &semaphoreInfo, NULL, &f_engine->imageAvailableSemaphores[i]) != VK_SUCCESS ||
+                     vkCreateSemaphore(f_engine->device, &semaphoreInfo, NULL, &f_engine->renderFinishedSemaphores[i]) != VK_SUCCESS ||
+                     vkCreateFence(f_engine->device, &fenceInfo, NULL, &f_engine->inFlightFences[i]) != VK_SUCCESS,
+                     "Failed to create semaphores!");
+    }
 }
 
 void
 VK_drawFrame(VulkanEngine* f_engine)
 {
-    vkWaitForFences(f_engine->device, 1, &f_engine->inFlightFence, VK_TRUE, UINT64_MAX);
-    vkResetFences(f_engine->device, 1, &f_engine->inFlightFence);
+    vkWaitForFences(f_engine->device, 1, &f_engine->inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
     
     uint32_t imageIndex;
-    vkAcquireNextImageKHR(f_engine->device, f_engine->swapchain, UINT64_MAX, f_engine->imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
+    VkResult result =
+        vkAcquireNextImageKHR(f_engine->device, f_engine->swapchain, UINT64_MAX, f_engine->imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
     
-    vkResetCommandBuffer(f_engine->commandBuffer, 0);
-    recordCommandBuffer(f_engine, f_engine->commandBuffer, imageIndex);
+    if(result == VK_ERROR_OUT_OF_DATE_KHR)
+    {
+        VK_recreateSwapchain(f_engine);
+        return;
+    }
+    MEMRE_ASSERT(result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR, "Failed to acquire swap chain image!");
+    
+    vkResetFences(f_engine->device, 1, &f_engine->inFlightFences[currentFrame]);
+    
+    vkResetCommandBuffer(f_engine->commandBuffers[currentFrame], 0);
+    recordCommandBuffer(f_engine, f_engine->commandBuffers[currentFrame], imageIndex);
     
     VkSubmitInfo submitInfo = {0};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     
-    VkSemaphore waitSemaphores[1] = {f_engine->imageAvailableSemaphore};
+    VkSemaphore waitSemaphores[1] = {f_engine->imageAvailableSemaphores[currentFrame]};
     VkPipelineStageFlags waitStages[1] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
     submitInfo.waitSemaphoreCount = 1;
     submitInfo.pWaitSemaphores = waitSemaphores;
     submitInfo.pWaitDstStageMask = waitStages;
     submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &f_engine->commandBuffer;
-    VkSemaphore signalSemaphores[1] = {f_engine->renderFinishedSemaphore};
+    submitInfo.pCommandBuffers = &f_engine->commandBuffers[currentFrame];
+    VkSemaphore signalSemaphores[1] = {f_engine->renderFinishedSemaphores[currentFrame]};
     submitInfo.signalSemaphoreCount = 1;
     submitInfo.pSignalSemaphores = signalSemaphores;
     
-    MEMRE_ASSERT(vkQueueSubmit(f_engine->graphicsQueue, 1, &submitInfo, f_engine->inFlightFence) != VK_SUCCESS,
+    MEMRE_ASSERT(vkQueueSubmit(f_engine->graphicsQueue, 1, &submitInfo, f_engine->inFlightFences[currentFrame]) != VK_SUCCESS,
                  "Failed to submit draw command buffer!");
     
     VkPresentInfoKHR presentInfo = {0};
@@ -977,7 +1048,34 @@ VK_drawFrame(VulkanEngine* f_engine)
     presentInfo.pSwapchains = swapchains;
     presentInfo.pImageIndices = &imageIndex;
     
-    vkQueuePresentKHR(f_engine->presentQueue, &presentInfo);
+    result = vkQueuePresentKHR(f_engine->presentQueue, &presentInfo);
+    
+    if((result == VK_ERROR_OUT_OF_DATE_KHR) || (result == VK_SUBOPTIMAL_KHR))
+    {
+        vkWaitForFences(f_engine->device, 1, &f_engine->inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
+        vkResetCommandBuffer(f_engine->commandBuffers[currentFrame], 0);
+        VK_cleanupSwapChain(f_engine);
+        VK_recreateSwapchain(f_engine);
+    }
+    else MEMRE_ASSERT(result != VK_SUCCESS, "Failed to present swap chain image!");
+    
+    currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+}
+
+void
+VK_run(VulkanEngine* f_engine, int* f_appIsRunning)
+{
+    MSG msg = {0};
+    while(*f_appIsRunning)
+    {
+        while(PeekMessage(&msg, NULL, 0U, 0U, PM_REMOVE))
+        {
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+        }
+        VK_drawFrame(f_engine);
+    }
+    vkDeviceWaitIdle(f_engine->device);
 }
 
 void
@@ -1008,30 +1106,25 @@ VK_initialize(VulkanEngine* f_engine, HWND* f_mainWindowHandle, uint32_t* f_main
     VK_createImageViews(f_engine);
     VK_createRenderPass(f_engine);
     VK_createGraphicsPipeline(f_engine);
-    VK_createFramebuffer(f_engine);
+    VK_createFramebuffers(f_engine);
     VK_createCommandPool(f_engine);
-    VK_createCommandBuffer(f_engine);
+    VK_createCommandBuffers(f_engine);
     VK_createSyncObjects(f_engine);
 }
 void
 VK_cleanup(VulkanEngine* f_engine)
 {
-    vkDestroySemaphore(f_engine->device, f_engine->imageAvailableSemaphore, NULL);
-    vkDestroySemaphore(f_engine->device, f_engine->renderFinishedSemaphore, NULL);
-    vkDestroyFence(f_engine->device, f_engine->inFlightFence, NULL);
-    vkDestroyCommandPool(f_engine->device, f_engine->commandPool, NULL);
-    for(uint32_t i = 0; i < f_engine->swapchainImagesArraySize; i++)
+    VK_cleanupSwapChain(f_engine);
+    for(uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     {
-        vkDestroyFramebuffer(f_engine->device, f_engine->swapchainFramebuffers[i], NULL);
+        vkDestroySemaphore(f_engine->device, f_engine->imageAvailableSemaphores[i], NULL);
+        vkDestroySemaphore(f_engine->device, f_engine->renderFinishedSemaphores[i], NULL);
+        vkDestroyFence(f_engine->device, f_engine->inFlightFences[i], NULL);
     }
+    vkDestroyCommandPool(f_engine->device, f_engine->commandPool, NULL);
     vkDestroyPipeline(f_engine->device, f_engine->graphicsPipeline, NULL);
     vkDestroyPipelineLayout(f_engine->device, f_engine->pipelineLayout, NULL);
     vkDestroyRenderPass(f_engine->device, f_engine->renderPass, NULL);
-    for(uint32_t i = 0; i < f_engine->swapchainImagesArraySize; i++)
-    {
-        vkDestroyImageView(f_engine->device, f_engine->swapchainImageViews[i], NULL);
-    }
-    vkDestroySwapchainKHR(f_engine->device, f_engine->swapchain, NULL);
     vkDestroyDevice(f_engine->device, NULL);
     if(globalEnableValidationLayers)
     {
@@ -1040,3 +1133,5 @@ VK_cleanup(VulkanEngine* f_engine)
     vkDestroySurfaceKHR(f_engine->instance, f_engine->surface, NULL);
     vkDestroyInstance(f_engine->instance, NULL);
 }
+
+#endif

@@ -7,47 +7,26 @@
 
 #include "core/render/vulkan_engine.h"
 
-int appIsRunning = MEMRE_TRUE;
+int gloalAppIsRunning = MEMRE_TRUE;
 
 uint32_t globalWindowWidth = 800;
 uint32_t globalWindowHeight = 600;
+
+VulkanEngine engine = {0};
 
 LRESULT CALLBACK
 WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	switch(uMsg)
 	{
-        case WM_PAINT:
-        {
-            PAINTSTRUCT ps;
-            HDC hdc = BeginPaint(hwnd, &ps);
-            FillRect(hdc, &ps.rcPaint, (HBRUSH)(COLOR_WINDOW));
-            EndPaint(hwnd, &ps);
-            return(0);
-        }
         case WM_CLOSE:
         {
             DestroyWindow(hwnd);
             PostQuitMessage(EXIT_FAILURE);
-            appIsRunning = MEMRE_FALSE;
+            gloalAppIsRunning = MEMRE_FALSE;
         }
 	}
 	return(DefWindowProc(hwnd, uMsg, wParam, lParam));
-}
-
-void mainLoop(VulkanEngine* f_engine)
-{
-    MSG msg = {0};
-    while(appIsRunning)
-    {
-        while(PeekMessage(&msg, NULL, 0U, 0U, PM_REMOVE))
-        {
-            TranslateMessage(&msg);
-            DispatchMessage(&msg);
-        }
-        VK_drawFrame(f_engine);
-    }
-    vkDeviceWaitIdle(f_engine->device);
 }
 
 int WINAPI
@@ -79,12 +58,16 @@ wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdS
 	}
     
 	ShowWindow(hwnd, nCmdShow);
+    SetWindowPos(hwnd,
+                 NULL,
+                 0,
+                 0,
+                 globalWindowWidth,
+                 globalWindowHeight,
+                 SWP_FRAMECHANGED);
     
-    VulkanEngine engine = {0};
     VK_initialize(&engine, &hwnd, &globalWindowWidth, &globalWindowHeight);
-    
-    mainLoop(&engine);
-    
+    VK_run(&engine, &gloalAppIsRunning);
     VK_cleanup(&engine);
     
 	return(0);
