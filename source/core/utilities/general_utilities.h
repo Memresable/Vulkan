@@ -8,6 +8,9 @@
 
 #define ARRAY_SIZE(X) sizeof(X)/sizeof(X[0])
 
+#define ALLOCATE_MEMORY(type, count) \
+(type*)VirtualAlloc(0, sizeof(type)*count, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE)
+
 #define MEMRE_ASSERT(X, err_string) \
 if(X) \
 { \

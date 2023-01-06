@@ -26,7 +26,7 @@ checkForIntegerDuplicates(uint32_t* f_uniqueArray, int* f_isIndexDuplicated,
                           uint32_t* f_arrayLookup, uint32_t f_arraySize)
 {
     // Initialization stage
-    CachedUniqueNumber* uniqueNumberList = (CachedUniqueNumber*)malloc(sizeof(CachedUniqueNumber) * f_arraySize);
+    CachedUniqueNumber* uniqueNumberList = ALLOCATE_MEMORY(CachedUniqueNumber, f_arraySize);
     for(uint32_t i = 0; i < f_arraySize; i++)
     {
         uniqueNumberList[i].number = 0;
@@ -66,8 +66,8 @@ inline UniqueIntegerArray
 createUniqueIntegerArray(uint32_t* f_array, uint32_t f_arraySize)
 {
     UniqueIntegerArray temp = {0};
-    temp.array = (uint32_t*)calloc(1, sizeof(uint32_t)*f_arraySize);
-    temp.isIndexDuplicated = (int*)calloc(1, sizeof(int)*f_arraySize);
+    temp.array = ALLOCATE_MEMORY(uint32_t, f_arraySize);
+    temp.isIndexDuplicated = ALLOCATE_MEMORY(int, f_arraySize);
     temp.size = f_arraySize;
     checkForIntegerDuplicates(temp.array, temp.isIndexDuplicated, f_array, f_arraySize);
     
@@ -81,7 +81,7 @@ createUniqueIntegerArray(uint32_t* f_array, uint32_t f_arraySize)
         }
     }
     result.size = totalActualArraySize;
-    result.array = (uint32_t*)calloc(1, sizeof(uint32_t)*totalActualArraySize);
+    result.array = ALLOCATE_MEMORY(uint32_t, totalActualArraySize);
     for(uint32_t index = 0, realIndex = 0; index < temp.size; index++)
     {
         if(!temp.isIndexDuplicated[index])
@@ -114,7 +114,7 @@ checkForStringDuplicates(string_t* f_uniqueArray, int* f_isIndexDuplicated,
                          string_t* f_arrayLookup, uint32_t f_arraySize)
 {
     // Initialization stage
-    CachedUniqueString* uniqueNumberList = (CachedUniqueString*)malloc(sizeof(CachedUniqueString) * f_arraySize);
+    CachedUniqueString* uniqueNumberList = ALLOCATE_MEMORY(CachedUniqueString, f_arraySize);
     for(uint32_t i = 0; i < f_arraySize; i++)
     {
         uniqueNumberList[i].string = 0;
@@ -154,8 +154,8 @@ inline UniqueStringArray
 createUniqueStringArray(string_t* f_array, uint32_t f_arraySize)
 {
     UniqueStringArray temp = {0};
-    temp.array = (string_t*)calloc(1, sizeof(string_t)*f_arraySize);
-    temp.isIndexDuplicated = (int*)calloc(1, sizeof(int)*f_arraySize);
+    temp.array = ALLOCATE_MEMORY(string_t, f_arraySize);
+    temp.isIndexDuplicated = ALLOCATE_MEMORY(int, f_arraySize);
     temp.size = f_arraySize;
     checkForStringDuplicates(temp.array, temp.isIndexDuplicated, f_array, f_arraySize);
     
@@ -169,7 +169,7 @@ createUniqueStringArray(string_t* f_array, uint32_t f_arraySize)
         }
     }
     result.size = totalActualArraySize;
-    result.array = (string_t*)calloc(1, sizeof(string_t)*totalActualArraySize);
+    result.array = ALLOCATE_MEMORY(string_t, totalActualArraySize);
     for(uint32_t index = 0, realIndex = 0; index < temp.size; index++)
     {
         if(!temp.isIndexDuplicated[index])

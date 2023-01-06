@@ -2,7 +2,6 @@
 #define UNICODE
 #endif 
 
-#include <stdio.h>
 #include <windows.h>
 
 #include "core/render/vulkan_engine.h"
@@ -12,7 +11,6 @@ int gloalAppIsRunning = MEMRE_TRUE;
 uint32_t globalWindowWidth = 800;
 uint32_t globalWindowHeight = 600;
 
-VulkanEngine engine = {0};
 
 LRESULT CALLBACK
 WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
@@ -32,7 +30,7 @@ WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 int WINAPI
 wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow)
 {
-	const wchar_t* className = L"Main application";
+    const wchar_t* className = L"Main Window";
     
 	WNDCLASS window_class = {0};
 	window_class.lpfnWndProc = WindowProc;
@@ -58,14 +56,18 @@ wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdS
 	}
     
 	ShowWindow(hwnd, nCmdShow);
+    
+    RECT screenRec = {0};
+    GetWindowRect(GetDesktopWindow(), &screenRec);
     SetWindowPos(hwnd,
                  NULL,
-                 0,
-                 0,
+                 (screenRec.left + screenRec.right)/4,
+                 (screenRec.top + screenRec.bottom)/4,
                  globalWindowWidth,
                  globalWindowHeight,
                  SWP_FRAMECHANGED);
     
+    VulkanEngine engine = {0};
     VK_initialize(&engine, &hwnd, &globalWindowWidth, &globalWindowHeight);
     VK_run(&engine, &gloalAppIsRunning);
     VK_cleanup(&engine);
