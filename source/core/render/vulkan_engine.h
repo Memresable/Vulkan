@@ -882,6 +882,7 @@ VK_recreateSwapchain(VulkanEngine* f_engine)
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(f_engine->physicalDevice, f_engine->surface, &capabilities);
     while((capabilities.currentExtent.width == 0) || (capabilities.currentExtent.height == 0))
     {
+        Sleep(10);
         vkGetPhysicalDeviceSurfaceCapabilitiesKHR(f_engine->physicalDevice, f_engine->surface, &capabilities);
         *f_engine->window.width = capabilities.currentExtent.width;
         *f_engine->window.height = capabilities.currentExtent.height;
