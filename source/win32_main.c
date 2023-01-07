@@ -4,7 +4,7 @@
 
 #include <windows.h>
 
-#include "core/render/vulkan_engine.h"
+#include "core/render/VulkanEngine.h"
 
 int gloalAppIsRunning = MEMRE_TRUE;
 
@@ -67,10 +67,10 @@ wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdS
                  globalWindowHeight,
                  SWP_FRAMECHANGED);
     
-    VulkanEngine engine = {0};
-    VK_initialize(&engine, &hwnd, &globalWindowWidth, &globalWindowHeight);
-    VK_run(&engine, &gloalAppIsRunning);
-    VK_cleanup(&engine);
+    VulkanEngine renderer = {0};
+    VK_initialize(&renderer, &hwnd, &globalWindowWidth, &globalWindowHeight);
+    VK_run(&renderer, &gloalAppIsRunning);
+    VK_cleanup(&renderer);
     
 	return(0);
 }

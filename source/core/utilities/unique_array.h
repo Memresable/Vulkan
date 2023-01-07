@@ -1,8 +1,6 @@
 #ifndef UNIQUE_ARRAY_H
 #define UNIQUE_ARRAY_H
 
-#include <stdlib.h>
-
 #include "../utilities/types.h"
 #include "../utilities/general_utilities.h"
 

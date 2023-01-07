@@ -1,6 +1,8 @@
 #ifndef G_UTILITIY_H
 #define G_UTILITIY_H
 
+#include <windows.h>
+
 #include "../utilities/types.h"
 
 #define MEMRE_FALSE 0
@@ -30,5 +32,12 @@ compareTwoStrings(string_t f_string1, string_t f_string2)
     }
     return(MEMRE_TRUE);
 }
+
+typedef struct
+{
+    HWND* handle;
+    uint32_t* width;
+    uint32_t* height;
+} WindowInfo;
 
 #endif
