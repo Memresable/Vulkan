@@ -15,9 +15,6 @@
 #include "C:\VulkanSDK\1.3.236.0\Include\vulkan\vulkan.h"
 #include "C:\VulkanSDK\1.3.236.0\Include\vulkan\vulkan_win32.h"
 
-#define APPLICATION_NAME "MemreVK1"
-#define ENGINE_NAME "MemrEngine"
-
 #define MAX_FRAMES_IN_FLIGHT 2
 
 uint32_t currentFrame = 0;
@@ -79,6 +76,9 @@ typedef struct
     VkImageView* swapchainImageViews;
     VkFramebuffer* swapchainFramebuffers;
     
+    VkBuffer vertexBuffer;
+    VkDeviceMemory vertexBufferMemory;
+    
     VkRenderPass renderPass;
     VkPipelineLayout pipelineLayout;
     VkPipeline graphicsPipeline;
@@ -120,7 +120,7 @@ VK_recreateSwapchain(VulkanEngine* f_engine)
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(f_engine->physicalDevice, f_engine->surface, &capabilities);
     while((capabilities.currentExtent.width == 0) || (capabilities.currentExtent.height == 0))
     {
-        Sleep(10);
+        Sleep(10); // fixes the high CPU usage when minimized
         vkGetPhysicalDeviceSurfaceCapabilitiesKHR(f_engine->physicalDevice, f_engine->surface, &capabilities);
         *f_engine->window.width = capabilities.currentExtent.width;
         *f_engine->window.height = capabilities.currentExtent.height;
@@ -137,15 +137,12 @@ VK_recreateSwapchain(VulkanEngine* f_engine)
     
     VK_cleanupSwapchain(f_engine);
     
-    //VK_createSwapchain(f_engine);
     VK_createSwapchain(f_engine->device, &f_engine->swapchain,
                        f_engine->physicalDevice, f_engine->surface, &f_engine->window,
                        &f_engine->swapchainImages, &f_engine->swapchainImagesArraySize,
                        &f_engine->swapchainImageFormat, &f_engine->swapchainExtent);
-    //VK_createImageViews(f_engine);
     VK_createImageViews(f_engine->device, &f_engine->swapchainImageViews, f_engine->swapchainImagesArraySize,
                         f_engine->swapchainImages, f_engine->swapchainImageFormat);
-    //VK_createFramebuffers(f_engine);
     VK_createFramebuffers(f_engine->device, &f_engine->swapchainFramebuffers,
                           &f_engine->swapchainImageViews, f_engine->swapchainImagesArraySize,
                           f_engine->renderPass, f_engine->swapchainExtent);
@@ -204,7 +201,11 @@ recordCommandBuffer(VulkanEngine* f_engine, VkCommandBuffer commandBuffer, uint3
     scissor.extent = f_engine->swapchainExtent;
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
     
-    vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+    VkBuffer vertexBuffers[1] = {f_engine->vertexBuffer};
+    VkDeviceSize offsets[1] = {0};
+    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+    
+    vkCmdDraw(commandBuffer, (uint32_t)ARRAY_SIZE(globalVertices), 1, 0, 0);
     
     vkCmdEndRenderPass(commandBuffer);
     
@@ -256,8 +257,8 @@ VK_drawFrame(VulkanEngine* f_engine)
     vkWaitForFences(f_engine->device, 1, &f_engine->inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
     
     uint32_t imageIndex;
-    VkResult result =
-        vkAcquireNextImageKHR(f_engine->device, f_engine->swapchain, UINT64_MAX, f_engine->imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
+    VkResult result = vkAcquireNextImageKHR(f_engine->device, f_engine->swapchain, UINT64_MAX,
+                                            f_engine->imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
     
     if(result == VK_ERROR_OUT_OF_DATE_KHR)
     {
@@ -344,14 +345,10 @@ VK_initialize(VulkanEngine* f_engine, HWND* f_mainWindowHandle, uint32_t* f_main
     f_engine->swapchainExtensions.extSwapchain = VK_KHR_SWAPCHAIN_EXTENSION_NAME;
     
     // Initialization stage
-    
-    // VulkanSetup.h (done)
     VK_createInstance(&f_engine->instance,
                       f_engine->surfaceExtensions.array, (uint32_t)ARRAY_SIZE(f_engine->surfaceExtensions.array),
                       f_engine->validationExtensions.array, (uint32_t)ARRAY_SIZE(f_engine->validationExtensions.array));
     VK_setupDebugMessenger(f_engine->instance, &f_engine->debugMessenger);
-    
-    // VulkanCompatiblity.h (done)
     VK_createSurface(f_engine->instance, &f_engine->surface, &f_engine->window);
     VK_pickPhysicalDevice(f_engine->instance, f_engine->surface,
                           &f_engine->swapchainExtensions,
@@ -360,8 +357,6 @@ VK_initialize(VulkanEngine* f_engine, HWND* f_mainWindowHandle, uint32_t* f_main
                            &f_engine->graphicsQueue, &f_engine->presentQueue,
                            &f_engine->swapchainExtensions,
                            f_engine->validationExtensions.array, ARRAY_SIZE(f_engine->validationExtensions.array));
-    
-    // VulkanImagiery.h (done)
     VK_createSwapchain(f_engine->device, &f_engine->swapchain,
                        f_engine->physicalDevice, f_engine->surface, &f_engine->window,
                        &f_engine->swapchainImages, &f_engine->swapchainImagesArraySize,
@@ -374,16 +369,18 @@ VK_initialize(VulkanEngine* f_engine, HWND* f_mainWindowHandle, uint32_t* f_main
     VK_createFramebuffers(f_engine->device, &f_engine->swapchainFramebuffers,
                           &f_engine->swapchainImageViews, f_engine->swapchainImagesArraySize,
                           f_engine->renderPass, f_engine->swapchainExtent);
-    
-    // VulkanRuntime.h
     VK_createCommandPool(f_engine);
+    VK_createVertexBuffer(f_engine->device, f_engine->physicalDevice, &f_engine->vertexBuffer, &f_engine->vertexBufferMemory);
     VK_createCommandBuffers(f_engine);
     VK_createSyncObjects(f_engine);
 }
+
 void
 VK_cleanup(VulkanEngine* f_engine)
 {
     VK_cleanupSwapchain(f_engine);
+    vkDestroyBuffer(f_engine->device, f_engine->vertexBuffer, NULL);
+    vkFreeMemory(f_engine->device, f_engine->vertexBufferMemory, NULL);
     for(uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     {
         vkDestroySemaphore(f_engine->device, f_engine->imageAvailableSemaphores[i], NULL);

@@ -4,9 +4,12 @@
 #include <windows.h>
 
 #include "../utilities/general_utilities.h"
+#include "../math/Vector.h"
 
 #include "C:\VulkanSDK\1.3.236.0\Include\vulkan\vulkan.h"
 #include "C:\VulkanSDK\1.3.236.0\Include\vulkan\vulkan_win32.h"
+
+#include "VulkanMemoryManagement.h"
 
 VkSurfaceFormatKHR
 VK_chooseSwapSurfaceFormat(VkSurfaceFormatKHR* f_availableFormats, uint32_t f_formatsArraySize)
@@ -182,14 +185,14 @@ typedef struct
 VulkanShaderBinaryData*
 VK_readShaderFile(LPCWSTR f_binaryShaderFile)
 {
-    HANDLE hFile;
-    hFile = CreateFile((LPCWSTR)f_binaryShaderFile,
-                       GENERIC_READ,
-                       FILE_SHARE_READ,
-                       NULL,
-                       OPEN_EXISTING,
-                       FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED,
-                       NULL);
+    HANDLE hFile = CreateFile((LPCWSTR)f_binaryShaderFile,
+                              GENERIC_READ,
+                              FILE_SHARE_READ,
+                              NULL,
+                              OPEN_EXISTING,
+                              FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED,
+                              NULL);
+    
     if(hFile == INVALID_HANDLE_VALUE) 
     { 
         OutputDebugStringA("Unable to open the file\n");
@@ -259,6 +262,13 @@ VK_createGraphicsPipeline(VkDevice f_device, VkPipelineLayout* f_pipelineLayout,
     
     VkPipelineVertexInputStateCreateInfo vertexInputInfo = {0};
     vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    
+    VkVertexInputBindingDescription bindingDescription = Vertex_getBindingDescription();
+    VertexInputAttributeDescriptionArray attributeDescriptions = Vertex_getAttributeDescriptions();
+    vertexInputInfo.vertexBindingDescriptionCount = 1;
+    vertexInputInfo.vertexAttributeDescriptionCount = attributeDescriptions.size;
+    vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
+    vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data;
     
     uint32_t dynamicStatesSize = 2;
     VkDynamicState dynamicStates[2];

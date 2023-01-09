@@ -7,8 +7,8 @@
 #include "C:\VulkanSDK\1.3.236.0\Include\vulkan\vulkan.h"
 #include "C:\VulkanSDK\1.3.236.0\Include\vulkan\vulkan_win32.h"
 
-#define APPLICATION_NAME "MemreVK1"
-#define ENGINE_NAME "MemrEngine"
+#define APPLICATION_NAME "MemreClub"
+#define ENGINE_NAME "VulkanIsFunny"
 
 const int globalEnableValidationLayers = MEMRE_TRUE;
 
