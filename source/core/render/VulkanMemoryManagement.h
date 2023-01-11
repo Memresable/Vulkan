@@ -80,12 +80,14 @@ findMemoryType(VkPhysicalDevice f_physicalDevice, uint32_t f_typeFilter, VkMemor
 }
 
 void
-VK_createVertexBuffer(VkDevice f_device, VkPhysicalDevice f_physicalDevice, VkBuffer* f_vertexBuffer, VkDeviceMemory* f_vertexBufferMemory)
+VK_createBuffer(VkDevice f_device, VkPhysicalDevice f_physicalDevice,
+                VkDeviceSize f_size, VkBufferUsageFlags f_usage, VkMemoryPropertyFlags f_properties,
+                VkBuffer* f_vertexBuffer, VkDeviceMemory* f_vertexBufferMemory)
 {
     VkBufferCreateInfo bufferInfo = {0};
     bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    bufferInfo.size = sizeof(globalVertices[0]) * ARRAY_SIZE(globalVertices);
-    bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+    bufferInfo.size = f_size;
+    bufferInfo.usage = f_usage;
     bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     MEMRE_ASSERT(vkCreateBuffer(f_device, &bufferInfo, NULL, f_vertexBuffer) != VK_SUCCESS,
                  "Failed to create a vertex buffer");
@@ -96,17 +98,78 @@ VK_createVertexBuffer(VkDevice f_device, VkPhysicalDevice f_physicalDevice, VkBu
     VkMemoryAllocateInfo allocInfo = {0};
     allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     allocInfo.allocationSize = memRequirements.size;
-    allocInfo.memoryTypeIndex = findMemoryType(f_physicalDevice, memRequirements.memoryTypeBits,
-                                               VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    allocInfo.memoryTypeIndex = findMemoryType(f_physicalDevice, memRequirements.memoryTypeBits, f_properties);
     MEMRE_ASSERT(vkAllocateMemory(f_device, &allocInfo, NULL, f_vertexBufferMemory) != VK_SUCCESS,
                  "Failed to allocate vertex buffer memory");
     
     vkBindBufferMemory(f_device, *f_vertexBuffer, *f_vertexBufferMemory, 0);
+}
+
+void
+VK_copyBuffer(VkDevice f_device, VkCommandPool f_commandPool, VkQueue f_graphicsQueue, VkBuffer f_srcBuffer, VkBuffer f_dstBuffer, VkDeviceSize f_size)
+{
+    VkCommandBufferAllocateInfo allocInfo = {0};
+    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocInfo.commandPool = f_commandPool;
+    allocInfo.commandBufferCount = 1;
     
-    void* data;
-    vkMapMemory(f_device, *f_vertexBufferMemory, 0, bufferInfo.size, 0, &data);
-    CopyMemory(data, globalVertices, (size_t)bufferInfo.size);
-    vkUnmapMemory(f_device, *f_vertexBufferMemory);
+    VkCommandBuffer commandBuffer;
+    vkAllocateCommandBuffers(f_device, &allocInfo, &commandBuffer);
+    
+    VkCommandBufferBeginInfo beginInfo = {0};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    
+    vkBeginCommandBuffer(commandBuffer, &beginInfo);
+    
+    VkBufferCopy copyRegion = {0};
+    copyRegion.size = f_size;
+    vkCmdCopyBuffer(commandBuffer, f_srcBuffer, f_dstBuffer, 1, &copyRegion);
+    
+    vkEndCommandBuffer(commandBuffer);
+    
+    VkSubmitInfo submitInfo = {0};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &commandBuffer;
+    
+    vkQueueSubmit(f_graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+    vkQueueWaitIdle(f_graphicsQueue);
+    
+    vkFreeCommandBuffers(f_device, f_commandPool, 1, &commandBuffer);
+}
+
+void
+VK_createVertexBuffer(VkDevice f_device, VkPhysicalDevice f_physicalDevice, VkCommandPool f_commandPool, VkQueue f_graphicsQueue,
+                      VkBuffer* f_vertexBuffer, VkDeviceMemory* f_vertexBufferMemory)
+{
+    VkDeviceSize bufferSize = sizeof(globalVertices[0]) * ARRAY_SIZE(globalVertices);
+    
+    VkBuffer stagingBuffer;
+    VkDeviceMemory stagingBufferMemory;
+    VK_createBuffer(f_device, f_physicalDevice,
+                    bufferSize, // size
+                    VK_BUFFER_USAGE_TRANSFER_SRC_BIT, // usage
+                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, // properties
+                    &stagingBuffer, &stagingBufferMemory);
+    
+    void* data = NULL;
+    vkMapMemory(f_device, stagingBufferMemory, 0, bufferSize, 0, &data);
+    CopyMemory(data, globalVertices, (size_t)bufferSize);
+    vkUnmapMemory(f_device, stagingBufferMemory);
+    
+    VK_createBuffer(f_device, f_physicalDevice,
+                    bufferSize, // size
+                    VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, // usage
+                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, // properties
+                    f_vertexBuffer, f_vertexBufferMemory);
+    
+    VK_copyBuffer(f_device, f_commandPool, f_graphicsQueue,
+                  stagingBuffer, *f_vertexBuffer, bufferSize);
+    
+    vkDestroyBuffer(f_device, stagingBuffer, NULL);
+    vkFreeMemory(f_device, stagingBufferMemory, NULL);
 }
 
 #endif

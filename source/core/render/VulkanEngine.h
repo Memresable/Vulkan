@@ -370,7 +370,8 @@ VK_initialize(VulkanEngine* f_engine, HWND* f_mainWindowHandle, uint32_t* f_main
                           &f_engine->swapchainImageViews, f_engine->swapchainImagesArraySize,
                           f_engine->renderPass, f_engine->swapchainExtent);
     VK_createCommandPool(f_engine);
-    VK_createVertexBuffer(f_engine->device, f_engine->physicalDevice, &f_engine->vertexBuffer, &f_engine->vertexBufferMemory);
+    VK_createVertexBuffer(f_engine->device, f_engine->physicalDevice, f_engine->commandPool, f_engine->graphicsQueue,
+                          &f_engine->vertexBuffer, &f_engine->vertexBufferMemory);
     VK_createCommandBuffers(f_engine);
     VK_createSyncObjects(f_engine);
 }

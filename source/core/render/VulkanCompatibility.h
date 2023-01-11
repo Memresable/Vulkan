@@ -142,10 +142,12 @@ VK_checkDeviceExtensionSupport(VkPhysicalDevice f_device, VulkanSwapchain* f_swa
 int
 VK_isDeviceSuitable(VkPhysicalDevice f_device, VkSurfaceKHR f_surface, VulkanSwapchain* f_swapchainExtensions)
 {
+    /*
     VkPhysicalDeviceProperties deviceProperties;
     VkPhysicalDeviceFeatures deviceFeatures;
     vkGetPhysicalDeviceProperties(f_device, &deviceProperties);
     vkGetPhysicalDeviceFeatures(f_device, &deviceFeatures);
+*/
     
     QueueFamilyIndices indices = VK_findQueueFamilies(f_device, f_surface);
     
@@ -212,6 +214,7 @@ VK_createLogicalDevice(VkDevice* f_device, VkPhysicalDevice f_physicalDevice, Vk
     }
     
     VkPhysicalDeviceFeatures deviceFeatures = {0};
+    vkGetPhysicalDeviceFeatures(f_physicalDevice, &deviceFeatures);
     
     VkDeviceCreateInfo createInfo = {0};
     createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
