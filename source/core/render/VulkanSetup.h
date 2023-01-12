@@ -5,7 +5,6 @@
 #include "../utilities/types.h"
 
 #include "C:\VulkanSDK\1.3.236.0\Include\vulkan\vulkan.h"
-#include "C:\VulkanSDK\1.3.236.0\Include\vulkan\vulkan_win32.h"
 
 #define APPLICATION_NAME "MemreClub"
 #define ENGINE_NAME "VulkanIsFunny"
@@ -58,6 +57,7 @@ VK_validationSupport(string_t* f_validationExtensionsArray, uint32_t f_validatio
         {
             if(compareTwoStrings(f_validationExtensionsArray[i], availableLayers[j].layerName))
             {
+                RELEASE_MEMORY(availableLayers);
                 return(MEMRE_TRUE);
             }
         }
@@ -170,10 +170,12 @@ VK_createInstance(VkInstance* f_instance,
     MEMRE_ASSERT(vkCreateInstance(&createInfo, NULL, f_instance) != VK_SUCCESS,
                  "Failed to create a Vulkan instance\n");
     
+    /*
     uint32_t extensionCount = 0;
     vkEnumerateInstanceExtensionProperties(NULL, &extensionCount, NULL);
     VkExtensionProperties* extensionProperties = ALLOCATE_MEMORY(VkExtensionProperties, extensionCount);
     vkEnumerateInstanceExtensionProperties(NULL, &extensionCount, &extensionProperties[0]);
+*/
 }
 
 #endif

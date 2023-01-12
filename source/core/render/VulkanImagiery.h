@@ -1,15 +1,14 @@
 #ifndef _VULKAN_IMAGIERY_H
 #define _VULKAN_IMAGIERY_H
 
+#include "VulkanMemoryManagement.h"
+
 #include <windows.h>
 
 #include "../utilities/general_utilities.h"
 #include "../math/Vector.h"
 
 #include "C:\VulkanSDK\1.3.236.0\Include\vulkan\vulkan.h"
-#include "C:\VulkanSDK\1.3.236.0\Include\vulkan\vulkan_win32.h"
-
-#include "VulkanMemoryManagement.h"
 
 VkSurfaceFormatKHR
 VK_chooseSwapSurfaceFormat(VkSurfaceFormatKHR* f_availableFormats, uint32_t f_formatsArraySize)
@@ -245,6 +244,9 @@ VK_createGraphicsPipeline(VkDevice f_device, VkPipelineLayout* f_pipelineLayout,
     
     VkShaderModule vertexShaderModule = VK_createShaderModule(f_device, vertexData);
     VkShaderModule fragmentShaderModule = VK_createShaderModule(f_device, fragmentData);
+    
+    RELEASE_MEMORY(vertexData);
+    RELEASE_MEMORY(fragmentData);
     
     VkPipelineShaderStageCreateInfo vertexShaderStageInfo = {0};
     vertexShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;

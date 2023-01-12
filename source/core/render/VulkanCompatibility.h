@@ -62,6 +62,7 @@ VK_findQueueFamilies(VkPhysicalDevice f_device, VkSurfaceKHR f_surface)
             }
         }
     }
+    RELEASE_MEMORY(queueFamilies);
     return(result);
 }
 
@@ -132,6 +133,7 @@ VK_checkDeviceExtensionSupport(VkPhysicalDevice f_device, VulkanSwapchain* f_swa
         {
             if(compareTwoStrings(f_swapchainExtensions->array[i], availableExtensions[j].extensionName))
             {
+                RELEASE_MEMORY(availableExtensions);
                 return(MEMRE_TRUE);
             }
         }
@@ -142,13 +144,6 @@ VK_checkDeviceExtensionSupport(VkPhysicalDevice f_device, VulkanSwapchain* f_swa
 int
 VK_isDeviceSuitable(VkPhysicalDevice f_device, VkSurfaceKHR f_surface, VulkanSwapchain* f_swapchainExtensions)
 {
-    /*
-    VkPhysicalDeviceProperties deviceProperties;
-    VkPhysicalDeviceFeatures deviceFeatures;
-    vkGetPhysicalDeviceProperties(f_device, &deviceProperties);
-    vkGetPhysicalDeviceFeatures(f_device, &deviceFeatures);
-*/
-    
     QueueFamilyIndices indices = VK_findQueueFamilies(f_device, f_surface);
     
     int extensionsSupported = VK_checkDeviceExtensionSupport(f_device, f_swapchainExtensions);
@@ -182,6 +177,7 @@ VK_pickPhysicalDevice(VkInstance f_instance, VkSurfaceKHR f_surface,
         }
     }
     MEMRE_ASSERT(f_physicalDevice == VK_NULL_HANDLE, "Failed to find a suitable GPU\n");
+    RELEASE_MEMORY(devices);
 }
 
 void
@@ -236,6 +232,8 @@ VK_createLogicalDevice(VkDevice* f_device, VkPhysicalDevice f_physicalDevice, Vk
     
     vkGetDeviceQueue(*f_device, *indices.graphicsFamily, 0, f_graphicsQueue);
     vkGetDeviceQueue(*f_device, *indices.presentFamily, 0, f_presentQueue);
+    
+    RELEASE_MEMORY(copiedIndicesArray);
 }
 
 #endif

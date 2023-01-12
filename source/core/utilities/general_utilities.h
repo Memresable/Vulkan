@@ -13,6 +13,9 @@
 #define ALLOCATE_MEMORY(type, count) \
 (type*)VirtualAlloc(0, sizeof(type)*count, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE)
 
+#define RELEASE_MEMORY(variableToFree) \
+VirtualFree(variableToFree, 0, MEM_RELEASE)
+
 #define MEMRE_ASSERT(X, err_string) \
 if(X) \
 { \

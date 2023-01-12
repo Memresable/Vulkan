@@ -1,17 +1,18 @@
 #ifndef _VULKAN_ENGINE_H
 #define _VULKAN_ENGINE_H
 
-#include <windows.h>
-
 #include "VulkanSetup.h"
 #include "VulkanCompatibility.h"
 #include "VulkanImagiery.h"
+
+#include <windows.h>
 
 #include "../utilities/general_utilities.h"
 #include "../utilities/unique_array.h"
 
 #include "../math/vector.h"
 
+// figure out a better way to handle this
 #include "C:\VulkanSDK\1.3.236.0\Include\vulkan\vulkan.h"
 #include "C:\VulkanSDK\1.3.236.0\Include\vulkan\vulkan_win32.h"
 
@@ -78,6 +79,8 @@ typedef struct
     
     VkBuffer vertexBuffer;
     VkDeviceMemory vertexBufferMemory;
+    VkBuffer indexBuffer;
+    VkDeviceMemory indexBufferMemory;
     
     VkRenderPass renderPass;
     VkPipelineLayout pipelineLayout;
@@ -204,8 +207,9 @@ recordCommandBuffer(VulkanEngine* f_engine, VkCommandBuffer commandBuffer, uint3
     VkBuffer vertexBuffers[1] = {f_engine->vertexBuffer};
     VkDeviceSize offsets[1] = {0};
     vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+    vkCmdBindIndexBuffer(commandBuffer, f_engine->indexBuffer, 0, VK_INDEX_TYPE_UINT16);
     
-    vkCmdDraw(commandBuffer, (uint32_t)ARRAY_SIZE(globalVertices), 1, 0, 0);
+    vkCmdDrawIndexed(commandBuffer, (uint32_t)ARRAY_SIZE(globalIndices), 1, 0, 0, 0);
     
     vkCmdEndRenderPass(commandBuffer);
     
@@ -265,7 +269,7 @@ VK_drawFrame(VulkanEngine* f_engine)
         VK_recreateSwapchain(f_engine);
         return;
     }
-    else MEMRE_ASSERT(result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR, "Failed to acquire swapchain image\n");
+    else MEMRE_ASSERT((result != VK_SUCCESS) && (result != VK_SUBOPTIMAL_KHR), "Failed to acquire swapchain image\n");
     
     vkResetFences(f_engine->device, 1, &f_engine->inFlightFences[currentFrame]);
     
@@ -305,7 +309,7 @@ VK_drawFrame(VulkanEngine* f_engine)
     {
         VK_recreateSwapchain(f_engine);
     }
-    else MEMRE_ASSERT(result != VK_SUCCESS, "Failed to present swapchain image\n");
+    else MEMRE_ASSERT((result != VK_SUCCESS), "Failed to present swapchain image\n");
     
     currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
@@ -372,6 +376,8 @@ VK_initialize(VulkanEngine* f_engine, HWND* f_mainWindowHandle, uint32_t* f_main
     VK_createCommandPool(f_engine);
     VK_createVertexBuffer(f_engine->device, f_engine->physicalDevice, f_engine->commandPool, f_engine->graphicsQueue,
                           &f_engine->vertexBuffer, &f_engine->vertexBufferMemory);
+    VK_createIndexBuffer(f_engine->device, f_engine->physicalDevice, f_engine->commandPool, f_engine->graphicsQueue,
+                         &f_engine->indexBuffer, &f_engine->indexBufferMemory);
     VK_createCommandBuffers(f_engine);
     VK_createSyncObjects(f_engine);
 }
@@ -380,8 +386,12 @@ void
 VK_cleanup(VulkanEngine* f_engine)
 {
     VK_cleanupSwapchain(f_engine);
+    
+    vkDestroyBuffer(f_engine->device, f_engine->indexBuffer, NULL);
+    vkFreeMemory(f_engine->device, f_engine->indexBufferMemory, NULL);
     vkDestroyBuffer(f_engine->device, f_engine->vertexBuffer, NULL);
     vkFreeMemory(f_engine->device, f_engine->vertexBufferMemory, NULL);
+    
     for(uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     {
         vkDestroySemaphore(f_engine->device, f_engine->imageAvailableSemaphores[i], NULL);
@@ -392,6 +402,7 @@ VK_cleanup(VulkanEngine* f_engine)
     vkDestroyPipeline(f_engine->device, f_engine->graphicsPipeline, NULL);
     vkDestroyPipelineLayout(f_engine->device, f_engine->pipelineLayout, NULL);
     vkDestroyRenderPass(f_engine->device, f_engine->renderPass, NULL);
+    
     vkDestroyDevice(f_engine->device, NULL);
     if(globalEnableValidationLayers)
     {
